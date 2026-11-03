@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The recorder's engine: find Civ, read its memory (read-only), turn samples into events, write JSONL.
+       No UI, no network, no project references: self-contained so it can be open-sourced. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <RootNamespace>OutsideRecorderCore</RootNamespace>
+    <AssemblyTitle>FFACiv Recorder capture and upload engine</AssemblyTitle>
+    <Description>Captures Civilization V saves and manages recordings and uploads. Original game saves are left untouched.</Description>
+    <Version>0.3.4</Version>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RecorderPublicRelease)' == 'true'">
+    <Compile Remove="MemoryDump.cs;StreamTest.cs" />
+  </ItemGroup>
+</Project>

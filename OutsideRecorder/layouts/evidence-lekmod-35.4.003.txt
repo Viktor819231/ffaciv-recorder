@@ -1,0 +1,125 @@
+# BinaryVerify evidence for LEKMOD/CvGameCore_Expansion2.dll (LEKMOD v35.4.003 download)
+# sha256 a5ac79567eff7c738f12c655457d2255199ef5da1e9e43aeb0e2b688b9161fd2
+## vtables (RTTI)
+.?AVCvGlobals@@ vtable RVA=0x377A64
+.?AVCvPlayerAI@@ vtable RVA=0x38AD4C
+.?AVCvCityAI@@ vtable RVA=0x359890
+.?AVCvMap@@ vtable RVA=0x380144
+.?AV?$FAutoArchiveClassContainer@VCvUnit@@@@ vtable RVA=0x39FD04
+## gGlobals = static object built by the CvGlobals constructor
+  ctor at 0x102240 (vtable store 0x102260)
+    caller 0x34B195: object RVA 0x403388
+  ctor at 0x102CB0 (vtable store 0x102CD4)
+    caller 0x347445: object RVA 0x403388
+## player array: GET_PLAYER inlined as index*size + [global]
+  size 0xF8A8 global RVA 0x42564C: 2105 sites
+  size 0xF8A8 global RVA 0x3EC5A4: 18 sites
+## unit (Lua Unit methods -> getters)
+block with IsEmbarked: 388 methods, sites 0x3292F7..0x32BA5E
+  GetX: wrapper RVA 0x3285D0  inline[EDI+0x4C(UInt32)]
+  GetY: wrapper RVA 0x328670  inline[EDI+0x58(UInt32)]
+  GetID: wrapper RVA 0x328530  inline[EDI+0x64(UInt32)]
+  GetOwner: wrapper RVA 0x3287E0  inline[EDI+0x28(UInt32)]
+  GetDamage: wrapper RVA 0x3223B0  inline[] >fn@0x23DCA0[ECX+0xC0(UInt32)]
+  GetMoves: wrapper RVA 0x3225F0  inline[] >fn@0x23DDD0[ECX+0xCC(UInt32)]
+  GetUnitType: wrapper RVA 0x325390  inline[] >fn@0x8D6A0[ECX+0x40(UInt32)]
+  GetFortifyTurns: wrapper RVA 0x322FB0  inline[] >fn@0x11FC90[ECX+0x150(UInt32)]
+  GetExperience: wrapper RVA 0x322900  inline[] >fn@0x23DDE0[ECX+0xE4(UInt32)]
+  GetLevel: wrapper RVA 0x322B50  inline[] >fn@0x23DDF0[ECX+0xF0(UInt32)]
+  IsEmbarked: wrapper RVA 0x3281E0  inline[EDI+0x70C(UInt8)]
+  GetActivityType: wrapper RVA 0x327340  inline[] >fn@0x23E380[ECX+0xA3C(UInt32)]
+  GetGameTurnCreated: wrapper RVA 0x322270  inline[] >fn@0x431F0[ECX+0xB4(UInt32)]
+  GetLastMoveTurn: wrapper RVA 0x322310  inline[] >fn@0x23B6A0[ECX+0x84(UInt32)]
+## player (Lua Player methods)
+block with GetUnitByID: 839 methods, sites 0x307BA7..0x30D0DB
+  GetUnitByID: wrapper RVA 0x2F5180  inline[] >fn@0x153D40[this+=0x1318,EAX+0x10(UInt32)]
+  GetCityByID: wrapper RVA 0x2F4F70  inline[] >fn@0x153D30[this+=0x12FC,EAX+0x10(UInt32)]
+  IsAlive: wrapper RVA 0x2F3EA0  inline[] >fn@0x14040[ECX+0x960(UInt8)]
+  IsTurnActive: wrapper RVA 0x2E47A0  inline[] >fn@0x156580[ECX+0x97C(UInt8)]
+  GetID: wrapper RVA 0x2F3F80  inline[] >fn@0xF61E0[ECX+0x2C(UInt32)]
+  GetCivilizationType: wrapper RVA 0x2F3FC0  inline[] >fn@0x1567F0[ECX+0x2C(UInt32)] >>fn@0x1B8F70[abs:0x425944]
+  IsHuman: wrapper RVA 0x2E3AD0  inline[] >fn@0x158E70[ECX+0x2C(UInt32)] >>fn@0x1BC840[abs:0x42609C,abs:0x425BD4,abs:0x425BD4,abs:0x426074]
+## city (Lua City methods)
+block with GetPopulation: 390 methods, sites 0x2CAF67..0x2CD6E7
+  GetX: wrapper RVA 0x2C3C00  inline[EDI+0x60(UInt32)]
+  GetY: wrapper RVA 0x2C3CA0  inline[EDI+0x6C(UInt32)]
+  GetID: wrapper RVA 0x2C3B60  inline[EDI+0x78(UInt32)]
+  GetOwner: wrapper RVA 0x2C6BA0  inline[] >fn@0x1AE3A0[ECX+0x54(UInt32)]
+  GetPopulation: wrapper RVA 0x2C45F0  inline[] >fn@0x23DCA0[ECX+0xC0(UInt32)]
+  GetDamage: wrapper RVA 0x2C8E20  inline[] >fn@0x39070[ECX+0x25C(UInt32)]
+  IsPuppet: wrapper RVA 0x2C68D0  inline[] >fn@0x433B0[ECX+0x35C(UInt8)]
+  IsOccupied: wrapper RVA 0x2C6890  inline[] >fn@0x456E0[wECX+0x35C(UInt8),ECX+0x350(UInt8)]
+  GetOriginalOwner: wrapper RVA 0x2C6C00  inline[] >fn@0x433F0[ECX+0x39C(UInt32)]
+  GetGameTurnFounded: wrapper RVA 0x2C4590  inline[] >fn@0x431E0[ECX+0x9C(UInt32)]
+  GetName: wrapper RVA 0x2C76E0  inline[abs:0xF0000000,abs:0xF0000000,abs:0xF0000000] >fn@0x434E0[this+=0x9A4] >fn@0x33CEC8[]
+## game + map (Lua Game / Map)
+block with GetGameTurn: 287 methods, sites 0x2DB1E2..0x2DD00B
+  GetGameTurn: wrapper RVA 0x2D7F40  inline[abs:0x4033B8] >fn@0xD9960[] >>fn@0x1B7D80[abs:0x425BC8]
+  GetActivePlayer: wrapper RVA 0x2D8830  inline[abs:0x4033B8] >fn@0xD9D30[] >>fn@0x1B7C90[abs:0x42570C]
+block with GetGridSize: 36 methods, sites 0x2E1812..0x2E1BC1
+  GetGridSize: wrapper RVA 0x2E11D0  inline[abs:0x4033BC,EAX+0xFB8(UInt32),EAX+0xFB4(UInt32),abs:0x4033BC,EAX+0xFBC(UInt32)]
+## gameStarted: interface CvDllPreGame slot 31 (the exe calls it)
+  vtable 0x3AA24C slot 31 -> 0x2B9D80
+    2B9D80 call 101B7D70h
+    2B9D85 ret 4
+  CvPreGame::gameStarted body:
+  1B7D70 mov al,ds:[10425BBCh]
+  1B7D75 ret
+## game seeds: interface CvDllPreGame slot 70 (mapRandomSeed) and 192 (syncRandomSeed), the exe calls them
+  vtable 0x3AA24C slot 70 -> 0x2B9FA0
+    2B9FA0 call 101B7E40h
+    2B9FA5 ret 4
+  slot 70 body:
+  1B7E40 mov eax,ds:[10425D04h]
+  1B7E45 ret
+  vtable 0x3AA24C slot 192 -> 0x2BA950
+    2BA950 call 101B80B0h
+    2BA955 ret 4
+  slot 192 body:
+  1B80B0 mov eax,ds:[104260D4h]
+  1B80B5 ret
+## unit / city lists: FFreeListTrashArray::GetAt (vtable slot 4)
+  vtable 0x38AA54 slot 4 -> 0x158200
+    158200 push esi
+    158201 mov esi,[esp+8]
+    158205 cmp esi,0FFFFFFFFh
+    158208 je short 10158232h
+    15820A mov edx,[ecx+18h]
+    15820D test edx,edx
+    15820F je short 10158232h
+    158211 mov eax,esi
+    158213 and eax,1FFFh
+    158218 cmp eax,[ecx+0Ch]
+    15821B jg short 10158232h
+    15821D mov eax,[edx+eax*8+4]
+    158221 test eax,eax
+    158223 je short 10158232h
+    158225 test esi,0FFFFE000h
+    15822B je short 10158234h
+    15822D cmp [eax+64h],esi
+    158230 je short 10158234h
+    158232 xor eax,eax
+    158234 pop esi
+    158235 ret 4
+  vtable 0x38AA34 slot 4 -> 0x158110
+    158110 push esi
+    158111 mov esi,[esp+8]
+    158115 cmp esi,0FFFFFFFFh
+    158118 je short 10158142h
+    15811A mov edx,[ecx+18h]
+    15811D test edx,edx
+    15811F je short 10158142h
+    158121 mov eax,esi
+    158123 and eax,1FFFh
+    158128 cmp eax,[ecx+0Ch]
+    15812B jg short 10158142h
+    15812D mov eax,[edx+eax*8+4]
+    158131 test eax,eax
+    158133 je short 10158142h
+    158135 test esi,0FFFFE000h
+    15813B je short 10158144h
+    15813D cmp [eax+78h],esi
+    158140 je short 10158144h
+    158142 xor eax,eax
+    158144 pop esi
+    158145 ret 4

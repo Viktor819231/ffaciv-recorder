@@ -1,0 +1,9 @@
+FFACiv Recorder 0.7.21 / UI29
+
+- Real-time moves on busy PCs: low free memory no longer pauses reading the game (reading needs very
+  little memory). Before, a PC with little free memory recorded only a few seconds every few minutes,
+  so replays had almost no unit moves. Low memory still holds back packing and uploading saves, and a
+  busy processor still pauses reading as before.
+- When reading does pause, the log now says why (processor busy, recorder over its budget, or memory).
+
+Unsigned beta, the same as 0.7.20. Installing over the current recorder keeps settings and recordings.

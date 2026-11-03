@@ -1,0 +1,12 @@
+FFACiv Recorder 0.7.5 - UI15 - unsigned local test
+
+- Multiplayer lobby now shows Civ as detected instead of Waiting for Civ.
+- Refresh lobby requests the next permitted observation and explains resource holds.
+- A private Follow me link can be created from the lobby before a game starts.
+- Lobby invitations wait without a gameplay slot or access to game data. Every
+  subsequent game still needs its own private acknowledgement and live-slot binding.
+- A lobby invite keeps its token and expiry when the first game begins.
+- Existing release signing, package verification and setup behavior are retained.
+
+The site needs the matching lobby-invitation API update. This local installer is
+not published on the website. Public recorder download/setup pages remain hidden.

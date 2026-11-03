@@ -1,0 +1,9 @@
+FFACiv Recorder 0.7.17 / UI27
+
+- Streaming is now its own tab, beside Recorder.
+- The tab keeps the Follow me link and the current game or lobby together.
+- Start a private stream from the current save without replacing the invite link.
+- Mark a recording done from the menu. Short games you choose to keep stay saved.
+- After you stop playing, approved uploads can finish. Existing recording choices stay.
+
+Unsigned beta, the same as 0.7.6. Installing over the current recorder keeps settings and recordings.

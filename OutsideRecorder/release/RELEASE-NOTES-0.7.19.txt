@@ -1,0 +1,14 @@
+FFACiv Recorder 0.7.19 / UI28
+
+- Saves list on every recording: which saves are on ffaciv.com, which wait on this PC, and why
+  they wait (upload timing, automatic uploads off, PC busy, no connection, livestream not ready).
+  A save the site refuses shows the site's own reason in red.
+- Once the website update is live, each save also shows what the site made of it: in the
+  replay, waiting to be converted, or could not be read.
+- Deleting a replay can be undone for 7 days. It is hidden from your list and from the website at
+  once, and erased for good after 7 days. Undo is on the message and under Previous games.
+- The Recorder tab shows only the two newest recordings. The rest are under Previous games
+  (renamed from Games). Deleting one leaves an Undo card in its place; no older game moves up.
+- Recordings show the turns they hold, for example "T30–144", instead of a turn count.
+
+Unsigned beta, the same as 0.7.18. Installing over the current recorder keeps settings and recordings.

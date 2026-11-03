@@ -1,0 +1,333 @@
+City micro evidence, 2026-10-28. Offsets are for hash-matched DLLs only.
+BNW SHA256: c5483b5857a6fb7ef107af93c5d34282eb713472e2a84d0eb9d3fdc104e155a5
+block with GetPopulation: 365 methods, sites 0x2767D7..0x278CCE
+  GetFocusType: wrapper RVA 0x274A40  inline[] >fn@0x3B5D0[ECX+0xB38(UInt32)] >fn@0x1E58D0[ECX+0x14(UInt32)]
+  IsForcedAvoidGrowth: wrapper RVA 0x274B80  inline[] >fn@0x3B5D0[ECX+0xB38(UInt32)] >fn@0x5D060[ECX+0x18(UInt8)] >fn@0x3F0F0[ECX+0x8F4(UInt32),ECX+0x944(UInt32),ECX+0x944(UInt32)]
+  IsNoAutoAssignSpecialists: wrapper RVA 0x2749A0  inline[] >fn@0x3B5D0[ECX+0xB38(UInt32)] >fn@0x5D050[ECX+0x5(UInt8)] >fn@0x1E58D0[ECX+0x14(UInt32)]
+  IsWorkingPlot: wrapper RVA 0x275370  inline[] >fn@0x2B4100[] >fn@0x3B5D0[ECX+0xB38(UInt32)] >fn@0x5D2E0[]
+  IsForcedWorkingPlot: wrapper RVA 0x275520  inline[] >fn@0x2B4100[] >fn@0x3B5D0[ECX+0xB38(UInt32)] >fn@0x5D430[] >fn@0x25D50[ECX+0x10(UInt32)]
+  GetSpecialistCount: wrapper RVA 0x2744A0  inline[] >fn@0x3B5D0[ECX+0xB38(UInt32)] >fn@0x5D0A0[ECX+0x6C(UInt32)]
+  GetNumSpecialistsInBuilding: wrapper RVA 0x2747A0  inline[] >fn@0x3B5D0[ECX+0xB38(UInt32)] >fn@0x5D110[ECX+0x74(UInt32)]
+  GetOrderFromQueue: wrapper RVA 0x276080  inline[EDI+0x4(UInt32),EDI+0x4(UInt32),EDI+0xC(UInt8),EDI+0xD(UInt8)] >fn@0x440B0[ECX+0x984(UInt32),ECX+0x980(UInt32)]
+  GetFoodTimes100: wrapper RVA 0x272580  inline[] >fn@0x3C3E0[ECX+0x1D0(UInt32)]
+  GetOverflowProduction: wrapper RVA 0x272620  inline[] >fn@0x3C400[ECX+0x1F4(UInt32)]
+  05CE30 push ebx
+  05CE31 xor ebx,ebx
+  05CE33 push esi
+  05CE34 mov esi,ecx
+  05CE36 push edi
+  05CE37 mov [esi+4],bl
+  05CE3A mov [esi+5],bl
+  05CE3D mov [esi+8],ebx
+  05CE40 mov [esi+0Ch],ebx
+  05CE43 mov [esi+10h],ebx
+  05CE46 mov dword ptr [esi+14h],0FFFFFFFFh
+  05CE4D lea eax,[esi+3Eh]
+  05CE50 mov ecx,25h
+  05CE55 mov [eax-25h],bl
+  05CE58 mov [eax],bl
+  05CE5A inc eax
+  05CE5B sub ecx,1
+  05CE5E jne short 1005CE55h
+  05CE60 push ebx
+  05CE61 push 129h
+  05CE66 push 5Bh
+  05CE68 push 1031A124h
+  05CE6D push 1
+  05CE6F mov ecx,103BD250h
+  05CE74 mov [esi+64h],ebx
+  05CE77 mov [esi+68h],ebx
+  05CE7A call 100E8400h
+  05CE7F xor ecx,ecx
+  05CE81 mov edx,4
+  05CE86 mul edx
+  05CE88 seto cl
+  05CE8B neg ecx
+  05D110 mov eax,[ecx+74h]
+  05D113 mov ecx,[esp+4]
+  05D117 mov eax,[eax+ecx*4]
+  05D11A ret 4
+  05D11D int 3
+  05D11E int 3
+  05D11F int 3
+  05D120 push esi
+  05D121 push edi
+  05D122 mov edi,ecx
+  05D124 mov ecx,103BD250h
+  05D129 xor esi,esi
+  05D12B call 100E74D0h
+  05D130 test eax,eax
+  05D132 jle short 1005D160h
+  05D134 mov ecx,[edi]
+  05D136 push esi
+  05D137 call 1003B5B0h
+  05D13C mov ecx,eax
+  05D13E call 10036930h
+  05D143 test eax,eax
+  05D145 jle short 1005D151h
+  05D147 mov eax,[edi+78h]
+  05D14A mov dword ptr [eax+esi*4],0
+  05D151 mov ecx,103BD250h
+  05D156 inc esi
+  05D157 call 100E74D0h
+  05D15C cmp esi,eax
+  05D15E jl short 1005D134h
+  05D160 pop edi
+  0E8400 mov eax,[ecx+5BCh]
+  0E8406 sub eax,[ecx+5B8h]
+  0E840C sar eax,2
+  0E840F ret
+  0E74D0 mov ecx,[ecx+6A4h]
+  0E74D6 jmp near ptr 101A77A0h
+  1A77A0 mov eax,[ecx+8]
+  1A77A3 sub eax,[ecx+4]
+  1A77A6 sar eax,2
+  1A77A9 ret
+  0440B0 mov eax,[esp+4]
+  0440B4 cmp eax,[ecx+984h]
+  0440BA jae short 100440C9h
+  0440BC shl eax,4
+  0440BF add eax,[ecx+980h]
+  0440C5 test eax,eax
+  0440C7 jne short 100440CBh
+  0440C9 xor eax,eax
+  0440CB ret 4
+  0440CE int 3
+  276118 mov eax,[edi]
+  27611A push eax
+  27611B push esi
+  27611C call 102EE00Eh
+  276121 mov ecx,[edi+4]
+  276124 push ecx
+  276125 push esi
+  276126 call 102EE00Eh
+  27612B mov edx,[edi+4]
+  27612E push edx
+  27612F push esi
+  276130 call 102EE00Eh
+  276135 movzx eax,byte ptr [edi+0Ch]
+  276139 push eax
+  27613A push esi
+  27613B call 102EE056h
+  276140 movzx ecx,byte ptr [edi+0Dh]
+  276144 push ecx
+  276145 push esi
+  276146 call 102EE056h
+snowve-8.1.1 SHA256: bfe5f287897aa2a8aa2b6a470aa0dcda30d06bd1d3a2cf0d0852f03a1c88cf44
+dll RSDS guid=437efb05-1279-4c52-bfd8-a85bb55a036a age=12 pdb=C:\Users\avtri\Desktop\WEEVEE-main\BuildOutput\VS2008_ModWin32\CvGameCore_Expansion2.pdb
+pdb info.Guid = 437efb05-1279-4c52-bfd8-a85bb55a036a
+pdb dbi header.Age = 12
+==== CvCity size=0xC58 (type index 86118 (0x16066))
+  +0x01D8 FAutoVariable<int,CvCity>                m_iFood
+  +0x01FC FAutoVariable<int,CvCity>                m_iOverflowProduction
+  +0x09C0 FFastSmallFixedList<OrderData,25,1,297,0> m_orderQueue
+  +0x0B88 CvCityCitizens*                          m_pCityCitizens
+==== CvCityCitizens size=0x84 (type index 63907 (0x109A3))
+  +0x0000 CvCity*                                  m_pCity
+  +0x0005 Boolean8                                 m_bNoAutoAssignSpecialists
+  +0x0014 CityAIFocusTypes                         m_eCityAIFocusTypes
+  +0x0018 Boolean8                                 m_bForceAvoidGrowth
+  +0x0019 Boolean8[37]                             m_pabWorkingPlot
+  +0x003E Boolean8[37]                             m_pabForcedWorkingPlot
+  +0x0064 Int32                                    m_iNumDefaultSpecialists
+  +0x0068 Int32                                    m_iNumForcedDefaultSpecialists
+  +0x006C Int32*                                   m_aiSpecialistCounts
+  +0x0074 Int32*                                   m_aiNumSpecialistsInBuilding
+  +0x0078 Int32*                                   m_aiNumForcedSpecialistsInBuilding
+  +0x0080 Boolean8                                 m_bInited
+==== CvGlobals size=0x2188 (type index 906 (0x138A))
+  +0x05B4 std::vector<CvSpecialistInfo *,std::allocator<CvSpecialistInfo *> > m_paSpecialistInfo
+  +0x06A4 CvBuildingXMLEntries*                    m_pBuildings
+==== OrderData size=0x10 (type index 7226 (0x2C3A))
+  +0x0000 OrderTypes                               eOrderType
+  +0x0004 Int32                                    iData1
+  +0x0008 Int32                                    iData2
+  +0x000C Boolean8                                 bSave
+==== BaseVector<OrderData,1> size=0xC (type index 87805 (0x166FD))
+  +0x0000 OrderData*                               m_pData
+  +0x0004 UInt32                                   m_uiCurrSize
+  +0x0008 UInt32                                   m_uiCurrMaxSize
+==== FStaticVector<OrderData,25,1,297,0> size=0x1A0 (type index 86661 (0x16285))
+  base +0x0 BaseVector<OrderData,1>
+  +0x000C UnsignedCharacter[400]                   m_aData
+==== FFastSmallFixedList<OrderData,25,1,297,0> size=0x1A0 (type index 89072 (0x16BF0))
+  +0x0000 FStaticVector<OrderData,25,1,297,0>      mVec
+==== CvBuildingXMLEntries size=0x10 (type index 88461 (0x1698D))
+  +0x0000 std::vector<CvBuildingEntry *,std::allocator<CvBuildingEntry *> > m_paBuildingEntries
+snowve-8.2.0 SHA256: b37002a3dd67848e27ec1b0f8d1c474c2899076878681b0b31ad5db38a67a88b
+dll RSDS guid=437efb05-1279-4c52-bfd8-a85bb55a036a age=22 pdb=C:\Users\avtri\Desktop\WEEVEE-main\BuildOutput\VS2008_ModWin32\CvGameCore_Expansion2.pdb
+pdb info.Guid = 437efb05-1279-4c52-bfd8-a85bb55a036a
+pdb dbi header.Age = 22
+==== CvCity size=0xC58 (type index 86118 (0x16066))
+  +0x01D8 FAutoVariable<int,CvCity>                m_iFood
+  +0x01FC FAutoVariable<int,CvCity>                m_iOverflowProduction
+  +0x09C0 FFastSmallFixedList<OrderData,25,1,297,0> m_orderQueue
+  +0x0B88 CvCityCitizens*                          m_pCityCitizens
+==== CvCity size=0xC58 (type index 89950 (0x16F5E))
+  +0x01D8 FAutoVariable<int,CvCity>                m_iFood
+  +0x01FC FAutoVariable<int,CvCity>                m_iOverflowProduction
+  +0x09C0 FFastSmallFixedList<OrderData,25,1,297,0> m_orderQueue
+  +0x0B88 CvCityCitizens*                          m_pCityCitizens
+==== CvCityCitizens size=0x84 (type index 63907 (0x109A3))
+  +0x0000 CvCity*                                  m_pCity
+  +0x0005 Boolean8                                 m_bNoAutoAssignSpecialists
+  +0x0014 CityAIFocusTypes                         m_eCityAIFocusTypes
+  +0x0018 Boolean8                                 m_bForceAvoidGrowth
+  +0x0019 Boolean8[37]                             m_pabWorkingPlot
+  +0x003E Boolean8[37]                             m_pabForcedWorkingPlot
+  +0x0064 Int32                                    m_iNumDefaultSpecialists
+  +0x0068 Int32                                    m_iNumForcedDefaultSpecialists
+  +0x006C Int32*                                   m_aiSpecialistCounts
+  +0x0074 Int32*                                   m_aiNumSpecialistsInBuilding
+  +0x0078 Int32*                                   m_aiNumForcedSpecialistsInBuilding
+  +0x0080 Boolean8                                 m_bInited
+==== CvGlobals size=0x2188 (type index 906 (0x138A))
+  +0x05B4 std::vector<CvSpecialistInfo *,std::allocator<CvSpecialistInfo *> > m_paSpecialistInfo
+  +0x06A4 CvBuildingXMLEntries*                    m_pBuildings
+==== OrderData size=0x10 (type index 7226 (0x2C3A))
+  +0x0000 OrderTypes                               eOrderType
+  +0x0004 Int32                                    iData1
+  +0x0008 Int32                                    iData2
+  +0x000C Boolean8                                 bSave
+==== BaseVector<OrderData,1> size=0xC (type index 87805 (0x166FD))
+  +0x0000 OrderData*                               m_pData
+  +0x0004 UInt32                                   m_uiCurrSize
+  +0x0008 UInt32                                   m_uiCurrMaxSize
+==== FStaticVector<OrderData,25,1,297,0> size=0x1A0 (type index 86661 (0x16285))
+  base +0x0 BaseVector<OrderData,1>
+  +0x000C UnsignedCharacter[400]                   m_aData
+==== FFastSmallFixedList<OrderData,25,1,297,0> size=0x1A0 (type index 89072 (0x16BF0))
+  +0x0000 FStaticVector<OrderData,25,1,297,0>      mVec
+==== CvBuildingXMLEntries size=0x10 (type index 88461 (0x1698D))
+  +0x0000 std::vector<CvBuildingEntry *,std::allocator<CvBuildingEntry *> > m_paBuildingEntries
+snowve-8.2.1 SHA256: 369584b78d31e8ed4f92870101c288f0496f2b15350b9461c44387f2178d171c
+dll RSDS guid=ba6c2648-5a54-4129-8a4b-c6fc209f1e23 age=1 pdb=C:\Users\avtri\Desktop\WEEVEE-main\BuildOutput\VS2008_ModWin32\CvGameCore_Expansion2.pdb
+pdb info.Guid = ba6c2648-5a54-4129-8a4b-c6fc209f1e23
+pdb dbi header.Age = 1
+==== CvCity size=0xC58 (type index 86903 (0x16377))
+  +0x01D8 FAutoVariable<int,CvCity>                m_iFood
+  +0x01FC FAutoVariable<int,CvCity>                m_iOverflowProduction
+  +0x09C0 FFastSmallFixedList<OrderData,25,1,297,0> m_orderQueue
+  +0x0B88 CvCityCitizens*                          m_pCityCitizens
+==== CvCityCitizens size=0x84 (type index 64805 (0x10D25))
+  +0x0000 CvCity*                                  m_pCity
+  +0x0005 Boolean8                                 m_bNoAutoAssignSpecialists
+  +0x0014 CityAIFocusTypes                         m_eCityAIFocusTypes
+  +0x0018 Boolean8                                 m_bForceAvoidGrowth
+  +0x0019 Boolean8[37]                             m_pabWorkingPlot
+  +0x003E Boolean8[37]                             m_pabForcedWorkingPlot
+  +0x0064 Int32                                    m_iNumDefaultSpecialists
+  +0x0068 Int32                                    m_iNumForcedDefaultSpecialists
+  +0x006C Int32*                                   m_aiSpecialistCounts
+  +0x0074 Int32*                                   m_aiNumSpecialistsInBuilding
+  +0x0078 Int32*                                   m_aiNumForcedSpecialistsInBuilding
+  +0x0080 Boolean8                                 m_bInited
+==== CvGlobals size=0x2188 (type index 904 (0x1388))
+  +0x05B4 std::vector<CvSpecialistInfo *,std::allocator<CvSpecialistInfo *> > m_paSpecialistInfo
+  +0x06A4 CvBuildingXMLEntries*                    m_pBuildings
+==== OrderData size=0x10 (type index 7241 (0x2C49))
+  +0x0000 OrderTypes                               eOrderType
+  +0x0004 Int32                                    iData1
+  +0x0008 Int32                                    iData2
+  +0x000C Boolean8                                 bSave
+==== BaseVector<OrderData,1> size=0xC (type index 88599 (0x16A17))
+  +0x0000 OrderData*                               m_pData
+  +0x0004 UInt32                                   m_uiCurrSize
+  +0x0008 UInt32                                   m_uiCurrMaxSize
+==== FStaticVector<OrderData,25,1,297,0> size=0x1A0 (type index 87445 (0x16595))
+  base +0x0 BaseVector<OrderData,1>
+  +0x000C UnsignedCharacter[400]                   m_aData
+==== FFastSmallFixedList<OrderData,25,1,297,0> size=0x1A0 (type index 89866 (0x16F0A))
+  +0x0000 FStaticVector<OrderData,25,1,297,0>      mVec
+==== CvBuildingXMLEntries size=0x10 (type index 89255 (0x16CA7))
+  +0x0000 std::vector<CvBuildingEntry *,std::allocator<CvBuildingEntry *> > m_paBuildingEntries
+snowve-8.3.0 SHA256: 32892137b1e76dbf7a5d1205a701630e05e2b3c2025432273a356226e6812d83
+dll RSDS guid=ba6c2648-5a54-4129-8a4b-c6fc209f1e23 age=2 pdb=C:\Users\avtri\Desktop\WEEVEE-main\BuildOutput\VS2008_ModWin32\CvGameCore_Expansion2.pdb
+pdb info.Guid = ba6c2648-5a54-4129-8a4b-c6fc209f1e23
+pdb dbi header.Age = 2
+==== CvCity size=0xC58 (type index 86903 (0x16377))
+  +0x01D8 FAutoVariable<int,CvCity>                m_iFood
+  +0x01FC FAutoVariable<int,CvCity>                m_iOverflowProduction
+  +0x09C0 FFastSmallFixedList<OrderData,25,1,297,0> m_orderQueue
+  +0x0B88 CvCityCitizens*                          m_pCityCitizens
+==== CvCityCitizens size=0x84 (type index 64805 (0x10D25))
+  +0x0000 CvCity*                                  m_pCity
+  +0x0005 Boolean8                                 m_bNoAutoAssignSpecialists
+  +0x0014 CityAIFocusTypes                         m_eCityAIFocusTypes
+  +0x0018 Boolean8                                 m_bForceAvoidGrowth
+  +0x0019 Boolean8[37]                             m_pabWorkingPlot
+  +0x003E Boolean8[37]                             m_pabForcedWorkingPlot
+  +0x0064 Int32                                    m_iNumDefaultSpecialists
+  +0x0068 Int32                                    m_iNumForcedDefaultSpecialists
+  +0x006C Int32*                                   m_aiSpecialistCounts
+  +0x0074 Int32*                                   m_aiNumSpecialistsInBuilding
+  +0x0078 Int32*                                   m_aiNumForcedSpecialistsInBuilding
+  +0x0080 Boolean8                                 m_bInited
+==== CvGlobals size=0x2188 (type index 904 (0x1388))
+  +0x05B4 std::vector<CvSpecialistInfo *,std::allocator<CvSpecialistInfo *> > m_paSpecialistInfo
+  +0x06A4 CvBuildingXMLEntries*                    m_pBuildings
+==== OrderData size=0x10 (type index 7241 (0x2C49))
+  +0x0000 OrderTypes                               eOrderType
+  +0x0004 Int32                                    iData1
+  +0x0008 Int32                                    iData2
+  +0x000C Boolean8                                 bSave
+==== BaseVector<OrderData,1> size=0xC (type index 88599 (0x16A17))
+  +0x0000 OrderData*                               m_pData
+  +0x0004 UInt32                                   m_uiCurrSize
+  +0x0008 UInt32                                   m_uiCurrMaxSize
+==== FStaticVector<OrderData,25,1,297,0> size=0x1A0 (type index 87445 (0x16595))
+  base +0x0 BaseVector<OrderData,1>
+  +0x000C UnsignedCharacter[400]                   m_aData
+==== FFastSmallFixedList<OrderData,25,1,297,0> size=0x1A0 (type index 89866 (0x16F0A))
+  +0x0000 FStaticVector<OrderData,25,1,297,0>      mVec
+==== CvBuildingXMLEntries size=0x10 (type index 89255 (0x16CA7))
+  +0x0000 std::vector<CvBuildingEntry *,std::allocator<CvBuildingEntry *> > m_paBuildingEntries
+lekmod-35.4.003 SHA256: a5ac79567eff7c738f12c655457d2255199ef5da1e9e43aeb0e2b688b9161fd2
+dll RSDS guid=4d0dd08d-b7a6-46f4-86d3-ae7f45dac65b age=26 pdb=C:\Users\EnormousApplePie\Documents\GitHub\Lekmod\LEKMOD_DLL\CvGameCoreDLL_Expansion2\BuildOutput\VS2013_ModWin32\CvGameCore_Expansion2.pdb
+pdb info.Guid = 4d0dd08d-b7a6-46f4-86d3-ae7f45dac65b
+pdb dbi header.Age = 26
+==== CvCity size=0xC9C (type index 90344 (0x170E8))
+  +0x0184 FAutoVariable<int,CvCity>                m_iFood
+  +0x01B4 FAutoVariable<int,CvCity>                m_iOverflowProduction
+  +0x09C4 FFastSmallFixedList<OrderData,25,1,297,0> m_orderQueue
+  +0x0BA4 CvCityCitizens*                          m_pCityCitizens
+==== CvCity size=0xC9C (type index 94211 (0x18003))
+  +0x0184 FAutoVariable<int,CvCity>                m_iFood
+  +0x01B4 FAutoVariable<int,CvCity>                m_iOverflowProduction
+  +0x09C4 FFastSmallFixedList<OrderData,25,1,297,0> m_orderQueue
+  +0x0BA4 CvCityCitizens*                          m_pCityCitizens
+==== CvCityCitizens size=0x84 (type index 67362 (0x11722))
+  +0x0000 CvCity*                                  m_pCity
+  +0x0005 Boolean8                                 m_bNoAutoAssignSpecialists
+  +0x0014 CityAIFocusTypes                         m_eCityAIFocusTypes
+  +0x0018 Boolean8                                 m_bForceAvoidGrowth
+  +0x0019 Boolean8[37]                             m_pabWorkingPlot
+  +0x003E Boolean8[37]                             m_pabForcedWorkingPlot
+  +0x0064 Int32                                    m_iNumDefaultSpecialists
+  +0x0068 Int32                                    m_iNumForcedDefaultSpecialists
+  +0x006C Int32*                                   m_aiSpecialistCounts
+  +0x0074 Int32*                                   m_aiNumSpecialistsInBuilding
+  +0x0078 Int32*                                   m_aiNumForcedSpecialistsInBuilding
+  +0x0080 Boolean8                                 m_bInited
+==== CvGlobals size=0x21F4 (type index 909 (0x138D))
+  +0x05E4 std::vector<CvSpecialistInfo *,std::allocator<CvSpecialistInfo *> > m_paSpecialistInfo
+  +0x06D4 CvBuildingXMLEntries*                    m_pBuildings
+==== CvGlobals size=0x21FC (type index 94220 (0x1800C))
+  +0x05E4 std::vector<CvSpecialistInfo *,std::allocator<CvSpecialistInfo *> > m_paSpecialistInfo
+  +0x06D4 CvBuildingXMLEntries*                    m_pBuildings
+==== OrderData size=0x10 (type index 7832 (0x2E98))
+  +0x0000 OrderTypes                               eOrderType
+  +0x0004 Int32                                    iData1
+  +0x0008 Int32                                    iData2
+  +0x000C Boolean8                                 bSave
+==== BaseVector<OrderData,1> size=0xC (type index 92071 (0x177A7))
+  +0x0000 OrderData*                               m_pData
+  +0x0004 UInt32                                   m_uiCurrSize
+  +0x0008 UInt32                                   m_uiCurrMaxSize
+==== FStaticVector<OrderData,25,1,297,0> size=0x1A0 (type index 90897 (0x17311))
+  base +0x0 BaseVector<OrderData,1>
+  +0x000C UnsignedCharacter[400]                   m_aData
+==== FFastSmallFixedList<OrderData,25,1,297,0> size=0x1A0 (type index 93339 (0x17C9B))
+  +0x0000 FStaticVector<OrderData,25,1,297,0>      mVec
+==== CvBuildingXMLEntries size=0x10 (type index 92726 (0x17A36))
+  +0x0000 std::vector<CvBuildingEntry *,std::allocator<CvBuildingEntry *> > m_paBuildingEntries

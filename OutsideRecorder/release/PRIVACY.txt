@@ -1,0 +1,65 @@
+FFACiv Recorder 0.7.24 - data and privacy information
+
+CAPTURE
+By default the recorder watches Civ autosave folders and copies settled saves.
+Optional experimental action logs read supported game memory from a separate
+process after explicit opt-in. They can include unit movement, city management
+and session observations. Read-only observation is not a crash-free guarantee.
+Developer memory-dump/network-test tools are excluded from this player package.
+Manual upload reads selected games. Original Civ saves are untouched.
+
+Save files can contain player names, game settings, map information and game
+history, potentially including in-game messages. They can reveal information
+that was hidden from individual players during the game. Treat them as game data
+you are choosing to share, not anonymous files.
+
+UPLOADS
+When uploads are enabled, the recorder sends copied/selected saves and necessary
+recording information to its configured server, normally ffaciv.com. Upload timing,
+format and optional memory logging are separate choices in setup. With automatic
+uploads on, a finished game is sent once Civ is in its main menu or closed (a
+multiplayer staging lobby counts as playing), when resources allow. The replay
+then stays hidden on ffaciv.com for 2 hours and goes public by itself; a warning
+comes 5 minutes before, with Hide 2 more hours and Delete, and the game card
+offers Make public now and Keep hidden. During-play/experimental sharing
+has separate permission and capability checks. A request already running can
+finish if Civ starts again. Queued work retries when the recorder runs online.
+
+Private livestreaming starts only when explicitly requested and supported. Links
+can be for this game or a timed follow session. The server must confirm private
+access before game data is sent. You can stop sharing/revoke a link. Sharing does
+not automatically resume after restarting the recorder. Links are unlisted:
+anyone receiving an authorized link may be able to view the permitted game data.
+
+The server assigns this installation an identifier and authentication key. The
+key is protected for the Windows user with Windows DPAPI. Requests identify the
+recorder version. Servers and hosting providers necessarily receive connection
+information such as the source IP address; this file makes no promise about
+hosting logs or server-side retention.
+
+Update checks contact the configured server for release information. Download
+update opens the official website in your browser. Update notifications can be
+disabled/postponed in settings. There is no automatic installer execution.
+
+CONTROL AND DELETION
+Use the capture/upload controls to stop collecting or sending new files. Quit
+from the tray to stop the recorder entirely. An upload already running may finish.
+Review game visibility choices before sharing. An unlisted link is not a promise
+of secrecy from anyone who receives the link.
+
+Use Delete in the recorder to request withdrawal of this PC's contribution.
+Offline deletion requests need the recorder to run online later. Other players'
+contributions and copies can remain. Deleting local files or uninstalling alone
+does not delete server data. Keep-copy settings can affect local retention after
+successful uploads. Civ's own saves are separate from recorder copies.
+
+SOURCE CODE
+The recorder's source code is public: https://github.com/Viktor819231/ffaciv-recorder
+Installers on its Releases page are built by GitHub from that code, each with
+its SHA-256 checksum and a GitHub build record linking it to the exact source.
+
+CONTACT
+Use the contact/support route on https://ffaciv.com for questions or deletion help.
+Before broad public distribution, the operator must publish its actual contact
+details, hosting retention policy and applicable privacy notice on that site.
+This product explanation does not replace that operator notice.

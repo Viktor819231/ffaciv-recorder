@@ -1,0 +1,9 @@
+FFACiv Recorder 0.7.24 / UI29
+
+- The recorder is open source: https://github.com/Viktor819231/ffaciv-recorder
+  This installer is built by GitHub from that code. Its SHA-256 checksum and GitHub's build record are on
+  the release page, so anyone can check the download is exactly that code.
+- The program does the same as 0.7.23: no change to recording, uploads or visibility.
+- READ-ME.txt and PRIVACY.txt describe the upload timing of 0.7.23 (sent after the game, hidden 2 hours).
+
+Unsigned beta, the same as 0.7.23. Installing over the current recorder keeps settings and recordings.

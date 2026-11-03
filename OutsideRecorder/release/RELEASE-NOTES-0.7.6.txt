@@ -1,0 +1,9 @@
+FFACiv Recorder 0.7.6 / UI16
+
+- Restore the upload timing choice: while playing or after Civ closes.
+- While-playing uploads apply to the current recording and respect per-game
+  keep-local, postponed, deleted and private controls, plus resource limits.
+- A paused upload now says Waiting / Upload timing instead of Off / Sent up to.
+- Lobby private invitations and Refresh lobby remain available.
+
+Unsigned local test build. Public distribution remains disabled.

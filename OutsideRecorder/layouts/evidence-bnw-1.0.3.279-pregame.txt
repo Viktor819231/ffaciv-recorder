@@ -1,0 +1,167 @@
+# CvDllPreGame slots read for the lobby (BNW 1.0.3.279, sha256 c5483b5857a6fb7e…); slot names from the Snowve 8.3.0 PDB (vtable of CvDllPreGame).
+# made by: out/slotdis.sh <dll> 197 40 27 26 195 73 30 79 61 194 44 32  (BinaryVerify vfn + dis). Slot 194 reads the vector through the pointer at RVA 0x3A64DC = 0x103DF48C.
+### slot 197
+  vtable 0x37A904 slot 197 -> 0x2EAA30
+    2EAA30 call 10197CA0h
+    2EAA35 ret 4
+  body 197CA0:
+  197CA0 mov eax,ds:[103DF7A0h]
+  197CA5 ret
+  197CB0 push 103DF400h
+  197CB5 push 103DF428h
+  197CBA call 10197750h
+  197CBF add esp,8
+  197CC2 ret
+### slot 40
+  vtable 0x37A904 slot 40 -> 0x2E9E80
+    2E9E80 call 101978E0h
+    2E9E85 ret 4
+  body 1978E0:
+  1978E0 mov eax,ds:[103DEF40h]
+  1978E5 ret
+  1978F0 mov al,ds:[103DEF4Ch]
+  1978F5 ret
+### slot 27
+  vtable 0x37A904 slot 27 -> 0x2E9DD0
+    2E9DD0 call 101978A0h
+    2E9DD5 ret 4
+  body 1978A0:
+  1978A0 mov eax,ds:[103DEE7Ch]
+  1978A5 ret
+  1978B0 mov eax,ds:[103DEF10h]
+  1978B5 ret
+### slot 26
+  vtable 0x37A904 slot 26 -> 0x2E9DC0
+    2E9DC0 call 10197890h
+    2E9DC5 ret 4
+  body 197890:
+  197890 fld dword ptr ds:[103DEEB0h]
+  197896 ret
+  1978A0 mov eax,ds:[103DEE7Ch]
+  1978A5 ret
+### slot 195
+  vtable 0x37A904 slot 195 -> 0x2EA9F0
+    2EA9F0 call 10197C60h
+    2EA9F5 ret 4
+  body 197C60:
+  197C60 mov eax,ds:[103DF5D0h]
+  197C65 ret
+  197C70 mov eax,103DF4B4h
+  197C75 ret
+### slot 73
+  vtable 0x37A904 slot 73 -> 0x2EB160
+    2EB160 push ecx
+    2EB161 push esi
+    2EB162 mov dword ptr [esp+4],0
+    2EB16A call 101979F0h
+    2EB16F mov esi,[esp+10h]
+    2EB173 push eax
+    2EB174 mov ecx,esi
+  body 1979F0:
+  1979F0 mov eax,103DF0B8h
+  1979F5 ret
+  197A00 mov eax,ds:[103DF0DCh]
+  197A05 ret
+### slot 30
+  vtable 0x37A904 slot 30 -> 0x2EAF30
+    2EAF30 push ecx
+    2EAF31 push esi
+    2EAF32 mov dword ptr [esp+4],0
+    2EAF3A call 101978C0h
+    2EAF3F mov esi,[esp+10h]
+    2EAF43 push eax
+    2EAF44 mov ecx,esi
+  body 1978C0:
+  1978C0 mov eax,103DEF1Ch
+  1978C5 ret
+  1978D0 mov eax,103DF7BCh
+  1978D5 ret
+### slot 79
+  vtable 0x37A904 slot 79 -> 0x2EB190
+    2EB190 push ecx
+    2EB191 mov eax,[esp+10h]
+    2EB195 push esi
+    2EB196 push eax
+    2EB197 mov dword ptr [esp+8],0
+    2EB19F call 10199470h
+    2EB1A4 mov esi,[esp+14h]
+  body 199470:
+  199470 mov eax,fs:[0]
+  199476 push 0FFFFFFFFh
+  199478 push 102FE22Eh
+  19947D push eax
+  19947E mov eax,[esp+10h]
+  199482 mov fs:[0],esp
+  199489 cmp eax,3Fh
+  19948C ja short 101994AEh
+  19948E mov edx,ds:[103DF1C8h]
+  199494 lea ecx,[eax*8]
+  19949B sub ecx,eax
+  19949D lea eax,[edx+ecx*4]
+  1994A0 mov ecx,[esp]
+  1994A3 mov fs:[0],ecx
+  1994AA add esp,0Ch
+  1994AD ret
+  1994AE mov eax,1
+  1994B3 test ds:[103DFDA0h],al
+### slot 61
+  vtable 0x37A904 slot 61 -> 0x2E9FC0
+    2E9FC0 mov eax,[esp+8]
+    2E9FC4 push eax
+    2E9FC5 call 10199210h
+    2E9FCA add esp,4
+    2E9FCD ret 8
+    2E9FD0 mov eax,[esp+0Ch]
+    2E9FD4 push eax
+  body 199210:
+  199210 mov eax,[esp+4]
+  199214 cmp eax,3Fh
+  199217 ja short 10199223h
+  199219 mov ecx,ds:[103DF004h]
+  19921F mov eax,[ecx+eax*4]
+  199222 ret
+  199223 or eax,0FFFFFFFFh
+  199226 ret
+  199230 mov eax,fs:[0]
+### slot 194
+  vtable 0x37A904 slot 194 -> 0x2EB2C0
+    2EB2C0 mov eax,[esp+8]
+    2EB2C4 cmp eax,3Fh
+    2EB2C7 ja short 102EB2D8h
+    2EB2C9 mov ecx,ds:[103A64DCh]
+    2EB2CF mov edx,[ecx+4]
+    2EB2D2 mov eax,[edx+eax*4]
+    2EB2D5 ret 8
+### slot 44
+  vtable 0x37A904 slot 44 -> 0x2E9EC0
+    2E9EC0 mov eax,[esp+8]
+    2E9EC4 push eax
+    2E9EC5 call 101990E0h
+    2E9ECA add esp,4
+    2E9ECD ret 8
+    2E9ED0 mov eax,[esp+8]
+    2E9ED4 push eax
+  body 1990E0:
+  1990E0 mov eax,[esp+4]
+  1990E4 cmp eax,3Fh
+  1990E7 ja short 101990F3h
+  1990E9 mov ecx,ds:[103DEF9Ch]
+  1990EF mov eax,[ecx+eax*4]
+  1990F2 ret
+  1990F3 or eax,0FFFFFFFFh
+  1990F6 ret
+  199100 push ebx
+### slot 32
+  vtable 0x37A904 slot 32 -> 0x2EAF60
+    2EAF60 call 101978D0h
+    2EAF65 mov ecx,[eax+8]
+    2EAF68 sub ecx,[eax+4]
+    2EAF6B mov eax,78787879h
+    2EAF70 imul ecx
+    2EAF72 sar edx,5
+    2EAF75 mov eax,edx
+  body 1978D0:
+  1978D0 mov eax,103DF7BCh
+  1978D5 ret
+  1978E0 mov eax,ds:[103DEF40h]
+  1978E5 ret

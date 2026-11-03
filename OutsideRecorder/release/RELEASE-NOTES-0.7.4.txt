@@ -1,0 +1,24 @@
+FFACiv Recorder 0.7.4 - UI14 - unsigned test installer
+
+This installer combines the current recorder-ux session's complete recorder
+source with release packaging/signing preparation. It supersedes the 0.7.0
+installer previously offered in this chat. No settings or recordings are reset.
+
+- Seven-page introduction explains recording choices and ends with an editable review.
+- Versioned setup brings older installations into the introduction once while
+  preserving their choices. Completed current setup stays complete after restart.
+- Installer Start now opens the introduction explicitly, even if setup was
+  completed before; it preserves choices. Normal launches remember completion.
+- Recorder has global on/off, inline upload-method choices and Manual upload.
+- Resource controls, startup recovery, delayed uploads and deletion fixes are included.
+- UI14 distinguishes recordings by capture time and explains deletion results.
+- Optional experimental action logs and private timed sharing retain their
+  eligibility/permission checks. Save-only remains the default.
+- Timed sharing needs matching server support; this build does not deploy it.
+- Player package excludes developer dump/network-test tools and loose UI overrides.
+- Update announcements link only to the official HTTPS site.
+- Bundled product/privacy information, dependency notices, checksums and Defender results.
+
+The UNSIGNED-TEST installer has no verified publisher signature. A clean Defender
+scan is not a guarantee against antivirus detections or Windows reputation warnings.
+Real-game stability and clean-PC installation still need separate testing.

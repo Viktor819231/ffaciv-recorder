@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <!-- Test-only: re-reads the Lekmod PDB to prove every offset in Layouts.cs. -->
+    <PackageReference Include="SharpPdb.Windows" Version="1.0.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\OutsideRecorder.Core\OutsideRecorder.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Compile Include="../OutsideRecorder.Shell/StreamingSetupPolicy.cs" Link="Shell/StreamingSetupPolicy.cs" />
+    <Using Include="OutsideRecorderCore" />
+    <Compile Include="..\OutsideRecorder.Shell\WebViewStartup.cs" Link="Shell\WebViewStartup.cs" />
+    <Compile Include="..\OutsideRecorder.Shell\Onboarding.cs" Link="Shell\Onboarding.cs" />
+    <Compile Include="..\OutsideRecorder.Shell\BatchUploadProgress.cs" Link="Shell\BatchUploadProgress.cs" />
+    <Compile Include="..\OutsideRecorder.Shell\CapturePreferences.cs" Link="Shell\CapturePreferences.cs" />
+    <Compile Include="..\OutsideRecorder.Shell\RecordingDeletionCache.cs" Link="Shell\RecordingDeletionCache.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,18 @@
+FFACiv Recorder 0.7.0
+
+Save-file test release. Real-game stability testing is still required.
+
+- Copies autosaves only after five seconds without size/write-time changes.
+- Uploads and server checks wait for 30 seconds of observed idle after Civ exits.
+- Realtime memory capture, raw tapes and livestream capture are disabled.
+- Original Civilization V saves remain untouched.
+- Player installer excludes developer memory-dump and network-test tools.
+- Public installer uses only its bundled interface, not loose UI update folders.
+- Update announcements open only HTTPS links on ffaciv.com or www.ffaciv.com.
+- Installer includes getting-started and data/privacy explanations.
+
+Release packaging now supports verified publisher signatures and timestamps for
+the app, installer and uninstaller, plus file inventories and Defender reports.
+An installer named UNSIGNED-TEST is not a signed public release. Check the exact
+package's release manifest for scan/signature results. No antivirus or SmartScreen
+guarantee is made.

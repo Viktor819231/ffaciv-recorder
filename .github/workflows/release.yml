@@ -1,0 +1,64 @@
+# Builds the FFACiv Recorder installer from this repository's code on GitHub's own Windows machine and publishes it on
+# the Releases page, with its SHA-256 and a signed build record (attestation) that ties the file to this exact commit.
+# Runs when a tag like v0.7.24 is pushed; the tag must equal <Version> in OutsideRecorder.Shell.csproj.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write       # create the release
+  id-token: write       # sign the build record
+  attestations: write   # store the build record
+
+jobs:
+  release:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Tag matches the program version
+        shell: bash
+        run: |
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' OutsideRecorder/OutsideRecorder.Shell/OutsideRecorder.Shell.csproj)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then echo "tag $GITHUB_REF_NAME, program $version"; exit 1; fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Tests
+        shell: bash
+        run: |
+          dotnet test OutsideRecorder/OutsideRecorder.Tests -c Release
+          node --test OutsideRecorder/tests/stream-controls.test.mjs
+
+      - name: Build the installer
+        shell: bash
+        run: OutsideRecorder/installer/build-installer.sh --github
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: out/or04/FFACiv-Recorder-Setup-${{ env.VERSION }}.exe
+
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          setup="out/or04/FFACiv-Recorder-Setup-$VERSION.exe"
+          hash=$(sha256sum "$setup" | cut -d' ' -f1)
+          {
+            cat "OutsideRecorder/release/RELEASE-NOTES-$VERSION.txt" | tr -d '\r'
+            echo
+            echo "---"
+            echo "Built by GitHub from commit $GITHUB_SHA ([build log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID))."
+            echo
+            echo "SHA-256 of \`FFACiv-Recorder-Setup-$VERSION.exe\`: \`$hash\`"
+            echo
+            echo "Check it: \`gh attestation verify FFACiv-Recorder-Setup-$VERSION.exe --repo $GITHUB_REPOSITORY\`"
+          } > notes.md
+          gh release create "$GITHUB_REF_NAME" "$setup" out/or04/SHA256SUMS.txt \
+            --title "FFACiv Recorder $VERSION" --notes-file notes.md

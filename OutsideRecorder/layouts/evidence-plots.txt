@@ -1,0 +1,192 @@
+# CvPlot / CvMap fields read for the live tiles (card OR03 "Tiles"), from each core's own code (Lua Plot/Map methods -> getters).
+# Lekmod has no DLL on this PC: its values come from its PDB (LobbyTests.LekmodPlotsMatchItsPdb).
+## out/bnw-core.dll sha256 c5483b5857a6fb7ef107af93c5d34282eb713472e2a84d0eb9d3fdc104e155a5
+block with GetPlotType: 190 methods, sites 0x2B9627..0x2BA959
+  GetOwner: wrapper RVA 0x2B7700  inline[] >fn@0x19480[ECX+0x4(Int8)]
+  GetImprovementType: wrapper RVA 0x2B79B0  inline[] >fn@0x17BA20[ECX+0x1B9(Int8)]
+  GetRouteType: wrapper RVA 0x2B7A10  inline[] >fn@0x17BAA0[ECX+0x1BF(Int8)]
+  IsImprovementPillaged: wrapper RVA 0x2B8D00  inline[] >fn@0x17BA30[ECX+0x1CD(UInt8)]
+  IsRoutePillaged: wrapper RVA 0x2B7A50  inline[] >fn@0x17BAB0[ECX+0x1CD(UInt8)]
+  GetX: wrapper RVA 0x2B70E0  inline[] >fn@0x19460[]
+  GetY: wrapper RVA 0x2B7100  inline[] >fn@0x19470[]
+block with GetGridSize: 36 methods, sites 0x28B272..0x28B621
+  GetPlotByIndex: wrapper RVA 0x28ACE0  inline[abs:0x3BD284,ECX+0xFBC(UInt32),ECX+0xFE4(UInt32)]
+  GetPlotByIndex body:
+  28ACFA cmp eax,[ecx+0FBCh]
+  28AD02 imul eax,1E4h
+  28AD08 add eax,[ecx+0FE4h]
+  fn 17BA30:
+  17BA30 mov al,[ecx+1CDh]
+  17BA36 and al,1
+  17BA38 ret
+  17BA39 int 3
+  fn 17BAB0:
+  17BAB0 mov al,[ecx+1CDh]
+  17BAB6 shr al,1
+  17BAB8 and al,1
+  17BABA ret
+  fn 19460:
+  019460 movsx eax,word ptr [ecx]
+  019463 ret
+  019464 int 3
+  019465 int 3
+  fn 19470:
+  019470 movsx eax,word ptr [ecx+2]
+  019474 ret
+  019475 int 3
+  019476 int 3
+  CvPlot::getResourceType 17CAB0 (called by Lua GetResourceType):
+  17CAC3 cmp byte ptr [edi+1B8h],0FFh
+  17CADD movsx eax,byte ptr [edi+1B8h]
+## 8.1.1/CvGameCore_Expansion2.dll sha256 bfe5f287897aa2a8aa2b6a470aa0dcda30d06bd1d3a2cf0d0852f03a1c88cf44
+block with GetPlotType: 191 methods, sites 0x2EAED7..0x2EC222
+  GetOwner: wrapper RVA 0x2E8F90  inline[] >fn@0x18E90[ECX+0x4(Int8)]
+  GetImprovementType: wrapper RVA 0x2E9240  inline[] >fn@0x188F20[ECX+0x1B9(Int8)]
+  GetRouteType: wrapper RVA 0x2E92A0  inline[] >fn@0x188FA0[ECX+0x1BF(Int8)]
+  IsImprovementPillaged: wrapper RVA 0x2EA590  inline[] >fn@0x188F30[ECX+0x1CE(UInt8)]
+  IsRoutePillaged: wrapper RVA 0x2E92E0  inline[] >fn@0x188FB0[ECX+0x1CE(UInt8)]
+  GetX: wrapper RVA 0x2E8970  inline[] >fn@0x18E70[]
+  GetY: wrapper RVA 0x2E8990  inline[] >fn@0x18E80[]
+block with GetGridSize: 38 methods, sites 0x2BC6D2..0x2BCAB8
+  GetPlotByIndex: wrapper RVA 0x2BC140  inline[abs:0x3D32BC,ECX+0xFBC(UInt32),ECX+0xFE4(UInt32)]
+  GetPlotByIndex body:
+  2BC15A cmp eax,[ecx+0FBCh]
+  2BC162 imul eax,1E4h
+  2BC168 add eax,[ecx+0FE4h]
+  fn 188F30:
+  188F30 mov al,[ecx+1CEh]
+  188F36 and al,1
+  188F38 ret
+  188F39 int 3
+  fn 188FB0:
+  188FB0 mov al,[ecx+1CEh]
+  188FB6 shr al,1
+  188FB8 and al,1
+  188FBA ret
+  fn 18E70:
+  018E70 movsx eax,word ptr [ecx]
+  018E73 ret
+  018E74 int 3
+  018E75 int 3
+  fn 18E80:
+  018E80 movsx eax,word ptr [ecx+2]
+  018E84 ret
+  018E85 int 3
+  018E86 int 3
+  CvPlot::getResourceType 18A010 (called by Lua GetResourceType):
+  18A023 cmp byte ptr [edi+1B8h],0FFh
+  18A03D movsx eax,byte ptr [edi+1B8h]
+## 8.2.0/CvGameCore_Expansion2.dll sha256 b37002a3dd67848e27ec1b0f8d1c474c2899076878681b0b31ad5db38a67a88b
+block with GetPlotType: 191 methods, sites 0x2EC107..0x2ED452
+  GetOwner: wrapper RVA 0x2EA1C0  inline[] >fn@0x19170[ECX+0x4(Int8)]
+  GetImprovementType: wrapper RVA 0x2EA470  inline[] >fn@0x187590[ECX+0x1B9(Int8)]
+  GetRouteType: wrapper RVA 0x2EA4D0  inline[] >fn@0x187610[ECX+0x1BF(Int8)]
+  IsImprovementPillaged: wrapper RVA 0x2EB7C0  inline[] >fn@0x1875A0[ECX+0x1CE(UInt8)]
+  IsRoutePillaged: wrapper RVA 0x2EA510  inline[] >fn@0x187620[ECX+0x1CE(UInt8)]
+  GetX: wrapper RVA 0x2E9BA0  inline[] >fn@0x19150[]
+  GetY: wrapper RVA 0x2E9BC0  inline[] >fn@0x19160[]
+block with GetGridSize: 38 methods, sites 0x2BD952..0x2BDD38
+  GetPlotByIndex: wrapper RVA 0x2BD3C0  inline[abs:0x3D52BC,ECX+0xFBC(UInt32),ECX+0xFE4(UInt32)]
+  GetPlotByIndex body:
+  2BD3DA cmp eax,[ecx+0FBCh]
+  2BD3E2 imul eax,1E4h
+  2BD3E8 add eax,[ecx+0FE4h]
+  fn 1875A0:
+  1875A0 mov al,[ecx+1CEh]
+  1875A6 and al,1
+  1875A8 ret
+  1875A9 int 3
+  fn 187620:
+  187620 mov al,[ecx+1CEh]
+  187626 shr al,1
+  187628 and al,1
+  18762A ret
+  fn 19150:
+  019150 movsx eax,word ptr [ecx]
+  019153 ret
+  019154 int 3
+  019155 int 3
+  fn 19160:
+  019160 movsx eax,word ptr [ecx+2]
+  019164 ret
+  019165 int 3
+  019166 int 3
+  CvPlot::getResourceType 188670 (called by Lua GetResourceType):
+  188683 cmp byte ptr [edi+1B8h],0FFh
+  18869D movsx eax,byte ptr [edi+1B8h]
+## 8.2.1/CvGameCore_Expansion2.dll sha256 369584b78d31e8ed4f92870101c288f0496f2b15350b9461c44387f2178d171c
+block with GetPlotType: 191 methods, sites 0x2EC1F7..0x2ED542
+  GetOwner: wrapper RVA 0x2EA2D0  inline[] >fn@0x19370[ECX+0x4(Int8)]
+  GetImprovementType: wrapper RVA 0x2EA580  inline[] >fn@0x187EF0[ECX+0x1B9(Int8)]
+  GetRouteType: wrapper RVA 0x2EA5E0  inline[] >fn@0x187F70[ECX+0x1BF(Int8)]
+  IsImprovementPillaged: wrapper RVA 0x2EB8D0  inline[] >fn@0x187F00[ECX+0x1CE(UInt8)]
+  IsRoutePillaged: wrapper RVA 0x2EA620  inline[] >fn@0x187F80[ECX+0x1CE(UInt8)]
+  GetX: wrapper RVA 0x2E9CB0  inline[] >fn@0x19350[]
+  GetY: wrapper RVA 0x2E9CD0  inline[] >fn@0x19360[]
+block with GetGridSize: 38 methods, sites 0x2BDA62..0x2BDE48
+  GetPlotByIndex: wrapper RVA 0x2BD4D0  inline[abs:0x3D52BC,ECX+0xFBC(UInt32),ECX+0xFE4(UInt32)]
+  GetPlotByIndex body:
+  2BD4EA cmp eax,[ecx+0FBCh]
+  2BD4F2 imul eax,1E4h
+  2BD4F8 add eax,[ecx+0FE4h]
+  fn 187F00:
+  187F00 mov al,[ecx+1CEh]
+  187F06 and al,1
+  187F08 ret
+  187F09 int 3
+  fn 187F80:
+  187F80 mov al,[ecx+1CEh]
+  187F86 shr al,1
+  187F88 and al,1
+  187F8A ret
+  fn 19350:
+  019350 movsx eax,word ptr [ecx]
+  019353 ret
+  019354 int 3
+  019355 int 3
+  fn 19360:
+  019360 movsx eax,word ptr [ecx+2]
+  019364 ret
+  019365 int 3
+  019366 int 3
+  CvPlot::getResourceType 188FB0 (called by Lua GetResourceType):
+  188FC3 cmp byte ptr [edi+1B8h],0FFh
+  188FDD movsx eax,byte ptr [edi+1B8h]
+## 8.3.0/CvGameCore_Expansion2.dll sha256 32892137b1e76dbf7a5d1205a701630e05e2b3c2025432273a356226e6812d83
+block with GetPlotType: 191 methods, sites 0x2EC377..0x2ED6C2
+  GetOwner: wrapper RVA 0x2EA430  inline[] >fn@0x19200[ECX+0x4(Int8)]
+  GetImprovementType: wrapper RVA 0x2EA6E0  inline[] >fn@0x187AF0[ECX+0x1B9(Int8)]
+  GetRouteType: wrapper RVA 0x2EA740  inline[] >fn@0x187B70[ECX+0x1BF(Int8)]
+  IsImprovementPillaged: wrapper RVA 0x2EBA30  inline[] >fn@0x187B00[ECX+0x1CE(UInt8)]
+  IsRoutePillaged: wrapper RVA 0x2EA780  inline[] >fn@0x187B80[ECX+0x1CE(UInt8)]
+  GetX: wrapper RVA 0x2E9E10  inline[] >fn@0x191E0[]
+  GetY: wrapper RVA 0x2E9E30  inline[] >fn@0x191F0[]
+block with GetGridSize: 38 methods, sites 0x2BDBC2..0x2BDFA8
+  GetPlotByIndex: wrapper RVA 0x2BD630  inline[abs:0x3D52BC,ECX+0xFBC(UInt32),ECX+0xFE4(UInt32)]
+  GetPlotByIndex body:
+  2BD64A cmp eax,[ecx+0FBCh]
+  2BD652 imul eax,1E4h
+  2BD658 add eax,[ecx+0FE4h]
+  fn 187B00:
+  187B00 mov al,[ecx+1CEh]
+  187B06 and al,1
+  187B08 ret
+  187B09 int 3
+  fn 187B80:
+  187B80 mov al,[ecx+1CEh]
+  187B86 shr al,1
+  187B88 and al,1
+  187B8A ret
+  fn 191E0:
+  0191E0 movsx eax,word ptr [ecx]
+  0191E3 ret
+  0191E4 int 3
+  0191E5 int 3
+  fn 191F0:
+  0191F0 movsx eax,word ptr [ecx+2]
+  0191F4 ret
+  0191F5 int 3
+  0191F6 int 3
+  CvPlot::getResourceType 188BC0 (called by Lua GetResourceType):
+  188BD3 cmp byte ptr [edi+1B8h],0FFh
+  188BED movsx eax,byte ptr [edi+1B8h]

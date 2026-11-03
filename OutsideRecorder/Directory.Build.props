@@ -1,0 +1,17 @@
+<Project>
+  <!-- File details Windows shows (Properties > Details) on every exe/dll of the FFACiv Recorder (card OR04): a program
+       with a recognizable name, company, version and copyright is easier for players to identify. Metadata does not
+       establish verified publisher identity or guarantee antivirus acceptance.
+       A project may set its own Product/Description/Version. -->
+  <PropertyGroup>
+    <Company>FFACiv</Company>
+    <Product>FFACiv Recorder</Product>
+    <Authors>FFACiv</Authors>
+    <Copyright>Copyright (c) 2026 FFACiv</Copyright>
+    <NeutralLanguage>en</NeutralLanguage>
+    <!-- no .pdb files in the shipped folder -->
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <!-- "0.3.2", not "0.3.2+<git hash>", in the file's Product version -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

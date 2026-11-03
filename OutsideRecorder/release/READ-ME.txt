@@ -1,0 +1,59 @@
+FFACiv Recorder 0.7.24 - UI29 - beta
+
+For Windows 10/11, 64-bit. Microsoft Edge WebView2 Runtime is required.
+The installer includes .NET; administrator access is not required.
+
+GETTING STARTED
+1. Install and open FFACiv Recorder. Complete the seven-page introduction and review.
+2. Configure Civilization V to autosave every turn and retain enough autosaves.
+3. Choose automatic/manual recording, optional experimental action logs, and when
+   and how to upload. Saved choices are preserved when upgrading.
+4. Play normally. Save-only is the default. Resource controls can pause background work.
+5. Leave the recorder running after playing for pending uploads. With automatic
+   uploads on, a finished game is sent once Civ is in its main menu or closed. The
+   replay stays hidden on ffaciv.com for 2 hours, then goes public by itself; a
+   warning comes 5 minutes before, with Hide 2 more hours and Delete. To send and process saves
+   during play, select Options > Upload and process saves > While playing.
+   Existing upgrades preserve your selected timing. If you quit, reopen later.
+
+Optional experimental action logs read supported Civ memory from a separate
+process after explicit opt-in. Private livestream links require compatible settings,
+a supported server and your explicit action. The recorder does not modify Civ's
+original saves. Crash-free operation has not been demonstrated in real-game testing.
+KEK autosaves are excluded from automatic capture; those games use Oblast.
+
+Closing the window leaves the recorder in the tray by the Windows clock. Use its
+tray menu's Quit to stop it. Start with Windows is optional in setup/settings.
+Manual upload lets you select existing games separately. Single-player and mod
+support depend on the selected capture options and the website's parser support.
+Reopen the introduction from Options or the tray's Recording methods & setup entry.
+Older installations see the versioned introduction once; completing the current
+introduction keeps it completed after restart without resetting preferences.
+The installer's Start now action opens the introduction explicitly, even if you
+completed it before. This does not reset saved choices. Normal launches remember
+completion. The --setup launch option also reopens the guide.
+
+YOUR FILES
+Default recorder data: %LOCALAPPDATA%\FFACiv\OutsideRecorder
+Settings: settings.txt in the installation folder, plus app preferences in the
+recorder data folder. A custom output folder can change the data location.
+Uninstall through Windows Settings > Apps. Recorder copies are kept unless you
+choose to remove them. Uninstalling does not withdraw games already uploaded.
+
+DOWNLOADS AND SUPPORT
+Official site: https://ffaciv.com
+Source code and GitHub-built installers: https://github.com/Viktor819231/ffaciv-recorder
+Use the support/contact route linked from the official site. Include the recorder
+version, Windows version, Civ/mod version, what happened and the time it happened.
+Do not post settings, stream-install files, credentials or whole recordings publicly.
+If a save is needed for investigation, share it privately after checking its contents.
+
+Updates open a download page in your browser; the recorder does not silently
+download or install programs. Use only the official release download.
+
+Windows may warn about an unfamiliar download. An unsigned test build does not
+have a verified publisher. A future signed release can still need reputation.
+Do not disable antivirus or add exclusions to install this program. Report a
+detection with its exact name, file name and version so it can be investigated.
+
+See PRIVACY.txt for what can leave this PC and the limits of deletion.

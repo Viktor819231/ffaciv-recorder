@@ -1,0 +1,9 @@
+FFACiv Recorder 0.7.20 / UI29
+
+- Uploaded games go public. A private livestream keeps the recording private only while you play:
+  when the game is finished and uploaded (automatically, Upload now or Mark as done), its replay
+  goes public on ffaciv.com, with its card, map preview and game page.
+- A replay you made private yourself (Replay settings > Make private) stays private.
+- Games that were already private before this version stay as they are: use Make public on them.
+
+Unsigned beta, the same as 0.7.19. Installing over the current recorder keeps settings and recordings.

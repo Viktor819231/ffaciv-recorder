@@ -1,0 +1,12 @@
+FFACiv Recorder 0.7.22 / UI29
+
+- The livestream keeps up: the recorder's own small CPU allowance no longer holds back sending saves.
+  Before, packing each turn's save went over the allowance for a few seconds, the recorder stopped the
+  upload halfway and started it over later, so a livestream could fall many turns behind and the
+  Saves list said "Paused to keep your PC smooth". The recorder already runs at below-normal priority,
+  so Civ always gets the processor first.
+- Fewer gaps in real-time moves: going over that allowance now only slows reading the game a little
+  (2 looks a second) instead of pausing it at every new turn.
+- A really busy PC (processor 85 % or more) or low memory still holds back packing and uploads as before.
+
+Unsigned beta, the same as 0.7.21. Installing over the current recorder keeps settings and recordings.

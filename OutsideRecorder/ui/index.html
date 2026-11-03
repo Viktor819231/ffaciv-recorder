@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'">
+<title>FFACiv Recorder</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app">
+  <aside class="side">
+    <div class="brand"><span id="mark" class="mark waiting" aria-hidden="true"></span><div class="brand-name">FFACiv Recorder<small>for Civilization V</small></div></div>
+    <nav id="nav" class="tabs" aria-label="Screens"></nav>
+    <div class="side-foot"><div id="sidestate" class="side-state"></div><div id="preview" class="preview" aria-label="Preview"></div></div>
+  </aside>
+  <main id="view" tabindex="-1"></main>
+</div>
+<div id="overlay"></div>
+<script src="js/icons.js"></script>
+<script src="js/mock.js"></script>
+<script src="js/bridge.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

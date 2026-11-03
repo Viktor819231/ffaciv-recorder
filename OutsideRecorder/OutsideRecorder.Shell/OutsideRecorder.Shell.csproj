@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The recorder's window shell (card OR02): a WinForms window holding WebView2 that shows the HTML in ../ui, the tray
+       icon and the corner pop-ups. Prototype host: the release host is Native AOT with hand-written WebView2 interop
+       (OR02 "The shell"); the HTML/JS in ../ui is the part that ships as it is. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>OutsideRecorderShell</RootNamespace>
+    <AssemblyName>FFACivRecorder</AssemblyName>
+    <AssemblyTitle>FFACiv Recorder - records Civilization V games (read-only)</AssemblyTitle>
+    <Description>Records Civilization V games from outside the game and shows them on ffaciv.com. Reads only; never changes Civ.</Description>
+    <Version>0.7.24</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- Card OR04: the .NET runtime ships inside the program folder (players need no .NET install), as a plain folder of
+         files: no single-file bundle, no compression, no trimming, no obfuscation (antivirus programs distrust packers). -->
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Public installers do not expose developer network harnesses or loose UI overrides. -->
+    <DefineConstants Condition="'$(RecorderPublicRelease)' == 'true'">$(DefineConstants);RECORDER_PUBLIC_RELEASE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\OutsideRecorder.Core\OutsideRecorder.Core.csproj" />
+    <!-- Prototype only (OR02): the release host talks to WebView2 through its own small COM interop, no package. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
+  <!-- The package also brings its WPF control, which clashes with WinForms' WindowsBase: only the WinForms one is used. -->
+  <Target Name="DropWebView2Wpf" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+  <ItemGroup>
+    <None Include="..\ui\**\*" Link="ui\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,12 @@
+FFACiv Recorder 0.7.23 / UI29
+
+- Games upload right after you play: with automatic uploads on, a finished game is sent as soon as Civ is in
+  its main menu or closed. Being in a multiplayer staging lobby counts as playing, so nothing is sent there.
+- The 2 hours now hold back visibility, not the upload: the replay stays hidden on ffaciv.com for 2 hours after
+  the game, then goes public by itself. A warning comes 5 minutes before it goes public, with "Hide 2 more hours"
+  and "Delete". The game card shows "Hidden · public in …" with "Make public now" and "Keep hidden".
+- A game that is already on the site (a private livestream, or an earlier part of the same game) keeps its
+  visibility, and a choice you make by hand (Make private / Make public) always wins over the timer.
+- Includes 0.7.22: the recorder's own small CPU allowance no longer holds back sending saves.
+
+Unsigned beta, the same as 0.7.22. Installing over the current recorder keeps settings and recordings.

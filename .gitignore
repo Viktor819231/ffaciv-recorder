@@ -1,0 +1,8 @@
+# build output
+bin/
+obj/
+out/
+TestResults/
+# editors
+.vs/
+*.user

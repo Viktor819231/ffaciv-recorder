@@ -1,0 +1,112 @@
+# The running turn's timer start (CvGame::m_curTurnTimer, first 8 bytes = QPC ticks): CvDllGame slot 83 = GetTurnTimerData (named from the Snowve 8.3.0 PDB) -> CvGame::GetTurnTimerData.
+## out sha256 c5483b5857a6fb7ef107af93c5d34282eb713472e2a84d0eb9d3fdc104e155a5
+  vtable 0x379924 slot 83 -> 0x2E3070
+    2E3070 mov eax,[esp+0Ch]
+    2E3074 mov ecx,[esp+8]
+    2E3078 mov edx,[esp+4]
+    2E307C push eax
+    2E307D push ecx
+    2E307E mov ecx,[edx+8]
+    2E3081 call 100CFC20h
+  CvGame::GetTurnTimerData 0CFC20:
+  0CFC20 push esi
+  0CFC21 mov esi,ecx
+  0CFC23 mov ecx,[esi+14D4h]
+  0CFC29 mov eax,[esi+14D0h]
+  0CFC2F push ecx
+  0CFC30 push eax
+  0CFC31 call 10011E90h
+  0CFC36 mov eax,[esp+10h]
+## 8.1.1 sha256 bfe5f287897aa2a8aa2b6a470aa0dcda30d06bd1d3a2cf0d0852f03a1c88cf44
+  vtable 0x379CB4 slot 83 -> 0x290360
+    290360 mov eax,[esp+0Ch]
+    290364 mov ecx,[esp+8]
+    290368 mov edx,[esp+4]
+    29036C push eax
+    29036D push ecx
+    29036E mov ecx,[edx+8]
+    290371 call 100D5090h
+  CvGame::GetTurnTimerData 0D5090:
+  0D5090 push esi
+  0D5091 mov esi,ecx
+  0D5093 mov ecx,[esi+1Ch]
+  0D5096 mov eax,[esi+18h]
+  0D5099 push ecx
+  0D509A push eax
+  0D509B call 10011E90h
+  0D50A0 mov eax,[esp+10h]
+## 8.2.0 sha256 b37002a3dd67848e27ec1b0f8d1c474c2899076878681b0b31ad5db38a67a88b
+  vtable 0x37BD24 slot 83 -> 0x290BD0
+    290BD0 mov eax,[esp+0Ch]
+    290BD4 mov ecx,[esp+8]
+    290BD8 mov edx,[esp+4]
+    290BDC push eax
+    290BDD push ecx
+    290BDE mov ecx,[edx+8]
+    290BE1 call 100D4F40h
+  CvGame::GetTurnTimerData 0D4F40:
+  0D4F40 push esi
+  0D4F41 mov esi,ecx
+  0D4F43 mov ecx,[esi+1Ch]
+  0D4F46 mov eax,[esi+18h]
+  0D4F49 push ecx
+  0D4F4A push eax
+  0D4F4B call 10011EB0h
+  0D4F50 mov eax,[esp+10h]
+## 8.2.1 sha256 369584b78d31e8ed4f92870101c288f0496f2b15350b9461c44387f2178d171c
+  vtable 0x37BD34 slot 83 -> 0x290D30
+    290D30 mov eax,[esp+0Ch]
+    290D34 mov ecx,[esp+8]
+    290D38 mov edx,[esp+4]
+    290D3C push eax
+    290D3D push ecx
+    290D3E mov ecx,[edx+8]
+    290D41 call 100D5AD0h
+  CvGame::GetTurnTimerData 0D5AD0:
+  0D5AD0 push esi
+  0D5AD1 mov esi,ecx
+  0D5AD3 mov ecx,[esi+1Ch]
+  0D5AD6 mov eax,[esi+18h]
+  0D5AD9 push ecx
+  0D5ADA push eax
+  0D5ADB call 10011EB0h
+  0D5AE0 mov eax,[esp+10h]
+## 8.3.0 sha256 32892137b1e76dbf7a5d1205a701630e05e2b3c2025432273a356226e6812d83
+  vtable 0x37BD34 slot 83 -> 0x290E60
+    290E60 mov eax,[esp+0Ch]
+    290E64 mov ecx,[esp+8]
+    290E68 mov edx,[esp+4]
+    290E6C push eax
+    290E6D push ecx
+    290E6E mov ecx,[edx+8]
+    290E71 call 100D59C0h
+  CvGame::GetTurnTimerData 0D59C0:
+  0D59C0 push esi
+  0D59C1 mov esi,ecx
+  0D59C3 mov ecx,[esi+1Ch]
+  0D59C6 mov eax,[esi+18h]
+  0D59C9 push ecx
+  0D59CA push eax
+  0D59CB call 10011EA0h
+  0D59D0 mov eax,[esp+10h]
+## the timer conversion (Snowve 8.3.0 0x11EA0): QueryPerformanceFrequency / QueryPerformanceCounter
+  011EA0 movsd xmm0,qword ptr ds:[106E77B0h]
+  011EA8 sub esp,10h
+  011EAB ucomisd xmm0,qword ptr ds:[10395198h]
+  011EB3 lahf
+  011EB4 push esi
+  011EB5 mov esi,ds:[1032919Ch]
+  011EBB test ah,44h
+  011EBE jp short 10011F01h
+  011EC0 push 106E77A8h
+  011EC5 call dword ptr ds:[10329138h]
+  011ECB push 106E77A0h
+  011ED0 call esi
+  011ED2 mov eax,ds:[106E77A8h]
+  011ED7 or eax,ds:[106E77ACh]
+  011EDD je short 10011EF1h
+  011EDF fild qword ptr ds:[106E77A8h]
+  011EE5 fld1
+  011EE7 fdivrp
+  011EE9 fstp qword ptr ds:[106E77B0h]
+  011EEF jmp short 10011F01h
