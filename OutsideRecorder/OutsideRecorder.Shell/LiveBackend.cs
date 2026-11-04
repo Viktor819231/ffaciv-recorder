@@ -542,6 +542,8 @@ sealed partial class LiveBackend : IRecorderBackend
         var pending = sender.ReadReplay(context, true);
         state["completionQueued"] = pending.Str("action") == "complete";
         state["keepShortRequested"] = pending["keepShort"]?.GetValue<bool>() == true;
+        // The finish carries "public" with it: the site copy stays private (livestream) until the finish goes out.
+        state["publicRequested"] = pending["private"] is JsonValue p && p.TryGetValue<bool>(out var priv) && !priv;
         return state;
     }
 
@@ -751,7 +753,12 @@ sealed partial class LiveBackend : IRecorderBackend
                 string? why = gid is null || !Regex.IsMatch(gid, "^[0-9a-f]{8}-[0-9a-f]{8}$") ? "This recording has no game id, so the site cannot tell which game it is."
                     : now || gid == s.Identity ? "This game is still being played. Block it after the game." : null;
                 var g = (JsonObject)list[^1]!;
-                g["uploadWaitReason"] = UploadWaitReason();
+                // A finished game's last lines and its finish wait for Civ's main menu (or Civ closed), also with the
+                // livestream on: the global reason does not say so then, and the window fell back to "waiting for the server".
+                bool waitsForMenu = entry is not null && !now && !CanUploadRecording(entry) && !uploadPolicy.IsIdle();
+                g["waitsForMenu"] = waitsForMenu;
+                g["uploadWaitReason"] = UploadWaitReason() ?? (waitsForMenu
+                    ? "Civ is still open in a game or a lobby. The replay is made by itself once Civ is at its main menu or closed." : null);
                 var (firstTurn, lastSaved, savedTurns) = TurnsOf(dir);
                 g["firstTurn"] = firstTurn; g["lastTurn"] = now ? s.Turn ?? lastSaved : lastSaved; g["savedTurns"] = savedTurns;
                 if (list.Count <= 3 || savesShown.Contains(Path.GetFileName(dir)))
@@ -1042,10 +1049,11 @@ sealed partial class LiveBackend : IRecorderBackend
                 else if (context is not null)
                 {
                     sender.ChooseReplay(context, choice);
-                    if (cmd == "replayChoice") _ = Task.Run(async () => {
-                        try { using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(15)); await sender.ApplyReplayChoiceAsync(context, choice, ct.Token); nextChecks = 0; }
-                        catch (Exception e) { Toast?.Invoke(J.Toast("warn", "Access change queued", e.Message)); }
-                    });
+                    // the player's choice goes now, also while uploads wait for Civ's main menu; a finish waits for the last
+                    // save and log, and its "public" with it (Mark as done can be pressed mid-game): only its keep goes now
+                    bool onSite = sender.ReadReplay(context)["state"] is not null;
+                    if (cmd == "replayChoice" || cmd == "keepShortGame" && onSite) SendAccessChoice(sender, context, choice);
+                    else if (cmd == "completeGame" && onSite) SendAccessChoice(sender, context, new JsonObject { ["keepShort"] = true });
                 }
                 else return J.Obj(("toast", J.Toast("warn", "Not received yet", "Wait for the game to reach the server.")));
                 nextChecks = 0;

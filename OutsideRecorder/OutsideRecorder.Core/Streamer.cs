@@ -469,12 +469,18 @@ public sealed partial class Streamer : IDisposable
         return false;
     }
 
+    /// <summary>Set while a visibility change (Make public / private, restrict) is sent: a few bytes the player asked for, so it
+    /// goes out at once, also while uploads wait for Civ's main menu or a calmer PC (the user, 2026-11-04: "when i make public
+    /// its actually will be made public"). Scoped to that one call: other requests keep their gates.</summary>
+    static readonly AsyncLocal<bool> accessChange = new();
+
     async Task<HttpResponseMessage> SendCoreAsync(Func<HttpRequestMessage> make, CancellationToken ct, bool auth)
     {
-        if (Workload?.CanStartHeavyWork == false) throw new WorkDeferredException("Server work paused while the computer is busy.");
-        if (!CanContactServer()) throw new HttpRequestException("Server work waits for game/menu, resource and upload permission.");
+        bool small = accessChange.Value;
+        if (!small && Workload?.CanStartHeavyWork == false) throw new WorkDeferredException("Server work paused while the computer is busy.");
+        if (!small && !CanContactServer()) throw new HttpRequestException("Server work waits for game/menu, resource and upload permission.");
         using var request = make();
-        if (request.Content is { } content) request.Content = uploadBudget.Wrap(content);
+        if (!small && request.Content is { } content) request.Content = uploadBudget.Wrap(content);
         if (auth) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", install!.Value.Key);
         request.Headers.TryAddWithoutValidation("X-Program-Version", version);
         Status = Status with { Requests = Status.Requests + 1 };

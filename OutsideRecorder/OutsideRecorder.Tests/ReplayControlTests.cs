@@ -73,6 +73,32 @@ public sealed class ReplayControlTests
         finally { if(Directory.Exists(root))Directory.Delete(root,true); }
     }
 
+    // The user, 2026-11-04: "when i make public its actually will be made public". A livestreamed game's Make public waited
+    // with its finish for Civ's main menu, so the site copy stayed private (and a short game's keep came too late).
+    [Fact]
+    public async Task MakePublicGoesOutWhileServerWorkWaitsAndTheFinishStaysQueued()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "recorder-public-now-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var receiver = new Receiver();
+            using var streamer = new Streamer(new RecorderSettings { OutputFolder = root, Stream = "local" }, receiver) { CanContactServer = () => false };
+            var context = new string('b', 32);
+            streamer.ChooseReplay(context, new JsonObject { ["action"] = "complete", ["keepShort"] = true, ["waitForEnd"] = true, ["private"] = false });
+            Assert.True(await streamer.ApplyReplayChoiceAsync(context, new JsonObject { ["private"] = false, ["keepShort"] = true }, default));
+            var sent = Assert.Single(receiver.StatePosts);
+            Assert.False(sent["private"]!.GetValue<bool>());
+            Assert.Null(sent["action"]);
+            var pending = streamer.ReadReplay(context, true);
+            Assert.Equal("complete", pending["action"]!.GetValue<string>());
+            Assert.Null(pending["private"]);
+            // only that call was let through: other server work still waits for Civ's main menu
+            await Assert.ThrowsAsync<HttpRequestException>(() => streamer.GetReplayLibraryAsync(default));
+            Assert.DoesNotContain(receiver.Calls, c => c.EndsWith("/games"));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
     [Fact]
     public async Task FailedInitializerRetainsPrivacyWithoutPoisoningLaterCompletion()
     {

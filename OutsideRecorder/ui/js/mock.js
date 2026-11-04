@@ -63,6 +63,9 @@ const Mock = (() => {
     resourcepaused: {label:'Resources paused · example data',apply:s=>{scenarios.safeCapture.apply(s);s.resources={...s.resources,paused:true,reason:'Waiting for computer load to ease',cpuPercent:0.4,systemCpuPercent:91.2};}},
     onboarding: {label:'First launch · setup choices',apply:s=>{scenarios.safeCapture.apply(s);s.firstRun=true;s.games=[];s.oldGames=null;s.status={kind:'waiting',title:'Finish setup to start',detail:'Choose your recording and upload preferences.'};}},
     scheduled: {label:'Finished game · hidden 2 hours',apply:s=>{scenarios.safeCapture.apply(s);s.games[0].uploadSchedule={state:'waiting',enabled:true,ended:true,dueAt:Date.now()+2*H-5*60e3,held:false,hidden:true};s.games[0].status='local';s.games[0].replay={};}},
+    finishwaits: {label:'Livestreamed game · finish waits for the main menu',apply:s=>{scenarios.replaycontrols.apply(s);Object.assign(s.games[0],{turns:46,firstTurn:1,lastTurn:46,status:'streamed',ended:true,sentSaves:47,queuedSaves:0,waitsForMenu:true,
+      uploadWaitReason:'Civ is still open in a game or a lobby. The replay is made by itself once Civ is at its main menu or closed.',uploadSchedule:{state:'upload',enabled:true,ended:true,held:false,hidden:false},
+      replay:{state:'recording',lastTurn:46,saves:47,processed:0,finishAt:Date.now()+55*60e3,keepShort:false,private:true,completionQueued:true,publicRequested:true}});}},
     streamready: {label:'Experimental stream · ready',apply:s=>{scenarios.recording.apply(s);s.livestream={active:false,canStart:true};s.live=true;s.production=true;}},
     streaming: {label:'Private livestream · active',apply:s=>{scenarios.streamready.apply(s);s.livestream={active:true,canStart:false,url:'https://ffaciv.com/replay/live/private-example',viewers:2};}},
     unsupportedbackup: { label: 'Unsupported build backup · example data', apply: s => {

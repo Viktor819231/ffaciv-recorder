@@ -96,6 +96,25 @@ sealed partial class LiveBackend
         lock (privateWhilePlaying) { LoadPrivateWhilePlaying(); if (!privateWhilePlaying.Remove(context)) return false; SavePrivateWhilePlaying(); return true; }
     }
 
+    /// <summary>Sends the player's own choice now (Make public / private, restrict, keep a short game): a site copy otherwise
+    /// stayed private (or a short game was deleted after its quiet hour) while the choice waited for Civ's main menu with
+    /// the finish (the user, 2026-11-04: "when i make public its actually will be made public"). The finish itself still waits.</summary>
+    void SendAccessChoice(Streamer sender, string context, JsonObject choice) => _ = Task.Run(async () =>
+    {
+        var access = new JsonObject();
+        foreach (var key in new[] { "private", "restricted", "keepShort" }) if (choice[key] is { } v) access[key] = v.DeepClone();
+        if (access.Count == 0) return;
+        try
+        {
+            using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            if (!await sender.ApplyReplayChoiceAsync(context, access, ct.Token))
+                Toast?.Invoke(J.Toast("warn", "The website did not confirm it", $"{sender.ReplayChoiceError} Your choice is kept on this PC and sent again later."));
+            nextLibrary = nextChecks = 0;
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException or OperationCanceledException)
+        { Toast?.Invoke(J.Toast("warn", $"Can't reach {ServerShort}", "Your choice is kept on this PC and sent again later.")); }
+    });
+
     void PublishFinishedReplay(Streamer sender, string context) => _ = Task.Run(async () =>
     {
         try { using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(15)); await sender.ApplyReplayChoiceAsync(context, new JsonObject { ["private"] = false }, ct.Token); nextLibrary = nextChecks = 0; }
@@ -582,7 +601,12 @@ sealed partial class LiveBackend
                 if (wasHidden && streamer is { } shown) RevealHeldReplay(shown, context, now: true);
                 if (cmd == "confirmGameFinished") { choice["restricted"] = false; if (liveShare.Snapshot.Scope == "game") StopLivestream(); }
                 streamer?.ChooseReplay(context, choice);
-                result = J.Obj(("toast", J.Toast("info", "Upload queued", uploadPolicy.CanSend()
+                // already on the site (a livestream sent it): public + keep go now; only the finish waits for the last save and log
+                bool onSite = streamer?.ReadReplay(context)["state"] is not null;
+                if (onSite && !wasHidden && streamer is { } publisher) SendAccessChoice(publisher, context, choice);
+                if (onSite && game?["queuedSaves"]?.GetValue<int>() == 0 && choice["private"] is not null)
+                    result = J.Obj(("toast", J.Toast("good", $"Going public on {ServerShort}", "Every save is already on the site. The replay is made when Civ is at its main menu or closed, or an hour after the last save.")));
+                else result = J.Obj(("toast", J.Toast("info", "Upload queued", uploadPolicy.CanSend()
                     ? session.HasPendingAutosaves || !workload.CanStartHeavyWork
                         ? "Waiting for pending save copies and available resources. Your upload choice is saved."
                         : "Sending when the server is available. The game card will confirm processing and provide your replay link."

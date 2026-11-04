@@ -1,4 +1,4 @@
-FFACiv Recorder 0.7.24 - UI29 - beta
+FFACiv Recorder 0.7.25 - UI30 - beta
 
 For Windows 10/11, 64-bit. Microsoft Edge WebView2 Runtime is required.
 The installer includes .NET; administrator access is not required.

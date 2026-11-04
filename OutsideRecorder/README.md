@@ -1,5 +1,15 @@
 # FFACiv Recorder
 
+## 0.7.25 — Make public means public now
+
+The user, 2026-11-04: "when i make public its actually will be made public". After a livestreamed game, Finish & make
+public / Make public / Keep short game sat in `replays/<context>.pending.json` with the finish, and every server call waits
+for Civ's main menu (`CanContactServer`), so the site copy stayed private and a short game could be deleted at its quiet
+hour. Now a visibility or keep choice is sent at once (`Streamer` lets `ApplyReplayChoiceAsync` / `SetReplayAccessAsync`
+past the upload gates for that one call, `LiveBackend.SendAccessChoice` says when the site refuses); the finish itself
+(`action: complete`) still waits for the last save and log. Mark as done mid-game sends only its keep, never public.
+The window shows "All saves uploaded" (phase `sent`) with the real reason (`waitsForMenu`) instead of "Waiting to upload".
+
 ## 0.7.24 — open source on GitHub
 
 The recorder's code is public at github.com/Viktor819231/ffaciv-recorder so players can see what they install (the

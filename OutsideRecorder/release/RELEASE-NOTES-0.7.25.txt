@@ -1,0 +1,12 @@
+FFACiv Recorder 0.7.25 / UI30
+
+- Make public now really makes your replay public. Before, after a livestreamed game, "Finish & make public" and
+  "Make public" waited until Civ was back at its main menu or closed, so the replay stayed hidden while you were
+  in a lobby or already playing the next game.
+- Keep short game works at once too: a game under 50 turns is no longer deleted by the website an hour after its
+  last save while the recorder waits for the main menu.
+- When every save is already on the site, the window says "All saves uploaded" and why the replay is not made yet,
+  instead of "Waiting to upload".
+- If the website does not confirm a visibility choice, the window tells you; the choice is kept and sent again.
+
+Unsigned beta, the same as 0.7.24. Installing over the current recorder keeps settings and recordings.

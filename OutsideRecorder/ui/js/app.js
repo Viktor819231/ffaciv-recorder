@@ -229,17 +229,19 @@ const App = (() => {
   // ---- Games ---------------------------------------------------------------------------------------------------------
   function uploadProgress(p) {
     const phase = p.phase, uploaded = p.uploaded ?? 0, total = p.total ?? 0, parsed = p.parsed ?? 0, parseTotal = p.parseTotal ?? 0;
-    const index = ['ready'].includes(phase) ? 3 : ['preview'].includes(phase) ? 2 : ['parsing','held','unsupported'].includes(phase) ? 1 : phase === 'error' && parseTotal ? 1 : 0;
-    const title = {queued:'Waiting to upload',uploading:'Uploading save files',parsing:'Parsing save files',preview:'Creating game preview',held:'Parsing paused by server',unsupported:'Waiting for mod support',ready:'Game preview ready',stopped:'Upload stopped',error:'Upload needs attention'}[phase] ?? 'Preparing upload';
+    const index = ['ready'].includes(phase) ? 3 : ['preview'].includes(phase) ? 2 : ['parsing','held','unsupported','sent'].includes(phase) ? 1 : phase === 'error' && parseTotal ? 1 : 0;
+    const title = {queued:'Waiting to upload',uploading:'Uploading save files',sent:'All saves uploaded',parsing:'Parsing save files',preview:'Creating game preview',held:'Parsing paused by server',unsupported:'Waiting for mod support',ready:'Game preview ready',stopped:'Upload stopped',error:'Upload needs attention'}[phase] ?? 'Preparing upload';
     const n = index === 1 ? parsed : uploaded, d = index === 1 ? parseTotal : total;
     const measured = d > 0 && ['uploading','parsing','queued','held','stopped'].includes(phase);
     const percent = measured ? Math.max(0,Math.min(100,Math.floor(100*n/d))) : null;
-    const count = index === 0 && total ? `${uploaded} of ${total} saves received` : index === 1 && parseTotal ? `${parsed} of ${parseTotal} saves parsed` : phase === 'preview' ? 'All saves parsed · waiting for the page' : '';
-    return `<div class="upload-progress" aria-live="polite"><div class="upload-stages">${['Upload','Parse','Preview'].map((s,i)=>`<span class="${i < index ? 'complete' : i === index ? 'active' : ''}">${i < index ? '✓ ' : `${i+1} · `}${s}</span>`).join('')}</div><b>${title}</b>${phase !== 'ready' ? `<div class="meter teal ${percent == null ? 'indeterminate' : ''}" role="progressbar" aria-label="${title}"${percent == null ? '' : ` aria-valuemin="0" aria-valuemax="${d}" aria-valuenow="${Math.min(n,d)}"`}><i style="--p:${percent ?? 35}%"></i></div>` : ''}${count ? `<div class="small">${count}</div>` : ''}${p.note ? `<div class="small">${esc(p.note)}</div>` : ''}</div>`;
+    const count = phase === 'sent' ? `${uploaded} of ${total} saves on the site` : index === 0 && total ? `${uploaded} of ${total} saves received` : index === 1 && parseTotal ? `${parsed} of ${parseTotal} saves parsed` : phase === 'preview' ? 'All saves parsed · waiting for the page' : '';
+    return `<div class="upload-progress" aria-live="polite"><div class="upload-stages">${['Upload','Parse','Preview'].map((s,i)=>`<span class="${i < index ? 'complete' : i === index ? 'active' : ''}">${i < index ? '✓ ' : `${i+1} · `}${s}</span>`).join('')}</div><b>${title}</b>${!['ready','sent'].includes(phase) ? `<div class="meter teal ${percent == null ? 'indeterminate' : ''}" role="progressbar" aria-label="${title}"${percent == null ? '' : ` aria-valuemin="0" aria-valuemax="${d}" aria-valuenow="${Math.min(n,d)}"`}><i style="--p:${percent ?? 35}%"></i></div>` : ''}${count ? `<div class="small">${count}</div>` : ''}${p.note ? `<div class="small">${esc(p.note)}</div>` : ''}</div>`;
   }
   function recordingProgress(g) {
     const r = g.replay ?? {}, sent = g.sentSaves ?? g.upload?.sentSaves ?? 0, queued = g.queuedSaves ?? g.upload?.queuedSaves ?? 0;
     if (r.state === 'processing') return uploadProgress({phase:r.saves > 0 && r.processed >= r.saves ? 'preview' : 'parsing', uploaded:sent,total:sent+queued,parsed:r.processed,parseTotal:r.saves,note:r.failed ? `${r.failed} saves could not be parsed.` : ''});
+    // every save already on the site (a livestreamed game): only the finish is left, so say that and why it waits
+    if (g.uploadSchedule?.state === 'upload' && !g.url && r.state !== 'ready' && queued === 0 && sent > 0) return uploadProgress({phase:'sent',uploaded:sent,total:sent,note:g.uploadWaitReason || 'Waiting for the site to start the replay.'});
     if (g.uploadSchedule?.state === 'upload' && !g.url && r.state !== 'ready') return uploadProgress({phase:queued > 0 && sent > 0 ? 'uploading' : 'queued',uploaded:sent,total:sent+queued,note:g.uploadWaitReason || (queued > 0 ? 'Uploads resume automatically when the game and computer are ready.' : 'Waiting for the server to acknowledge the recording.')});
     return '';
   }
@@ -247,7 +249,7 @@ const App = (() => {
     const r = g.replay ?? {}, context = g.context, args = {game:g.id,context};
     const acknowledged = !!(g.url || g.siteGame || r.state || (g.sentSaves ?? 0) > 0 || g.lastSentTurn != null || g.upload?.lastSentTurn != null);
     const kept = r.keepShort || r.keepShortRequested, short = (g.turns ?? g.turn ?? 0) < 50;
-    let line = r.completionQueued ? 'Finish requested · waiting for upload permission and server confirmation' : !acknowledged ? 'Saved on this PC' : r.state === 'deleted' ? 'Short game deleted' : r.state === 'processing' ? '' : r.state === 'ready' || g.url ? 'Replay generated and stored' : r.finishAt ? `${short && !kept ? 'Deleted' : 'Finished'} <span data-until="${r.finishAt}">${until(r.finishAt)}</span> without a new save or log` : g.uploadSchedule?.state === 'upload' ? '' : 'Waiting for the server to acknowledge this recording';
+    let line = r.completionQueued ? 'Finish requested' :!acknowledged ? 'Saved on this PC' : r.state === 'deleted' ? 'Short game deleted' : r.state === 'processing' ? '' : r.state === 'ready' || g.url ? 'Replay generated and stored' : r.finishAt ? `${short && !kept ? 'Deleted' : 'Finished'} <span data-until="${r.finishAt}">${until(r.finishAt)}</span> without a new save or log` : g.uploadSchedule?.state === 'upload' ? '' : 'Waiting for the server to acknowledge this recording';
     let acts = '', options = '';
     if (g.url || r.url) acts += btn(`${icon('external')} Game page`, 'openSite', {url:g.url || r.url}, 'primary');
     if (!['processing','ready','deleted'].includes(r.state) && !g.siteGame && context && !r.completionQueued) {
@@ -259,7 +261,8 @@ const App = (() => {
       options += btn(`${icon(priv ? 'globe' : 'lock')} ${priv ? 'Make public' : 'Make private'}`, 'replayChoice', {...args,private:!priv});
       options += btn(restricted ? 'Allow replay viewing' : 'Restrict viewing for 14 days', 'replayChoice', {...args,restricted:!restricted});
     }
-    if (priv && !(g.uploadSchedule?.state === 'waiting' && g.uploadSchedule?.hidden)) line += ' · Private: hidden from the website';
+    if (priv && r.completionQueued && r.publicRequested) line += ' · Hidden on the website until it is finished, then public';
+    else if (priv && !(g.uploadSchedule?.state === 'waiting' && g.uploadSchedule?.hidden)) line += ' · Private: hidden from the website';
     else if (restricted) line += ` · Page listed; replay locked until ${esc(new Date(restrictedUntil).toLocaleDateString())}`;
     options += `<button class="btn quiet danger" data-delete="${esc(g.id)}" data-context="${esc(context ?? '')}" data-k="delete-${esc(g.id)}">${icon('x')} Delete recording</button>`;
     const active = !g.ended && (g.status === 'recording' || g.context === S.current?.context && !S.current?.ended);
@@ -325,7 +328,7 @@ const App = (() => {
     const civs = g.players.map((p) => `<span style="white-space:nowrap"><span class="civdot" style="background:${esc(p.color)}"></span>${esc(p.civ)}${p.you ? ' (you)' : ''}</span>`).join(' · ');
     let line = '', acts = '';
     const more = (items) => dropdown('more-' + g.id, icon('more'), items, 'quiet more', false);
-    if (S.live) { line = g.status === 'recording' ? 'Recording now' : g.replay?.state === 'ready' ? 'Replay ready' : (g.sentSaves ?? 0) > 0 ? `${g.sentSaves} saves uploaded · waiting for replay confirmation` : g.uploadSchedule?.ended ? 'Game ended · saved on this PC' : 'Local recording'; if (g.folder) acts = btn(`${icon('folder')} Open folder`, 'openFolder', {game:g.id}, 'quiet'); }
+    if (S.live) { line = g.status === 'recording' ? 'Recording now' : g.replay?.state === 'ready' ? 'Replay ready' : (g.sentSaves ?? 0) > 0 ? `${g.sentSaves} saves uploaded · ${g.waitsForMenu ? 'replay made after you leave the game' : 'replay not made yet'}` : g.uploadSchedule?.ended ? 'Game ended · saved on this PC' : 'Local recording'; if (g.folder) acts = btn(`${icon('folder')} Open folder`, 'openFolder', {game:g.id}, 'quiet'); }
     else switch (g.status) {
       case 'recording': line = 'Recording now'; acts = btn(`${icon('folder')} Open folder`, 'openFolder', { game: g.id }, 'quiet'); break;
       case 'sending': line = S.testBuild ? `Sending to the test server · ${g.queuedSaves ?? 0} saves to go` : `Sending · ${g.percent ?? 0} %`; acts = btn(`${icon('folder')} Open folder`, 'openFolder', { game: g.id }, 'quiet'); break;

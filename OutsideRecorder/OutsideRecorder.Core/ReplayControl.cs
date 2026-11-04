@@ -33,6 +33,8 @@ public sealed partial class Streamer
         var durable = (JsonObject)choice.DeepClone();
         durable.Remove("initialize");
         ChooseReplay(context, durable);
+        // callers send visibility only: a queued finish ("action") stays in the pending file for after the last save and log
+        accessChange.Value = true; // flows into this call's requests only (an async method never hands it back to its caller)
         await EnsureRegisteredAsync(ct);
         using var r = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"recordings/{context}/state")
         { Content = new StringContent(choice.ToJsonString(), Encoding.UTF8, "application/json") }, ct);
@@ -116,6 +118,7 @@ public sealed partial class Streamer
     /// <summary>Changes access for one of this install's processed games.</summary>
     public async Task SetReplayAccessAsync(string mod, string game, JsonObject choice, CancellationToken ct)
     {
+        accessChange.Value = true;
         using var r = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"games/{Uri.EscapeDataString(mod)}/{Uri.EscapeDataString(game)}/access")
         { Content = new StringContent(choice.ToJsonString(), Encoding.UTF8, "application/json") }, ct);
         r.EnsureSuccessStatusCode();
