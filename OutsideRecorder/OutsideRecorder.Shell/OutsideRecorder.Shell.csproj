@@ -12,7 +12,7 @@
     <AssemblyName>FFACivRecorder</AssemblyName>
     <AssemblyTitle>FFACiv Recorder - records Civilization V games (read-only)</AssemblyTitle>
     <Description>Records Civilization V games from outside the game and shows them on ffaciv.com. Reads only; never changes Civ.</Description>
-    <Version>0.7.25</Version>
+    <Version>0.7.26</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>

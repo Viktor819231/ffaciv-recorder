@@ -18,6 +18,7 @@ sealed class ReleaseNotifications : IDisposable
     long? checkedAt;
     string? error, dismissThisRun;
     int checking;
+    bool waited; // an automatic check was skipped since the last real one, so "newest version" may be out of date
     public event Action<JsonObject>? Toast;
     public Func<bool> CanCheck {get;set;} = ()=>true;
 
@@ -30,10 +31,12 @@ sealed class ReleaseNotifications : IDisposable
         timer = new System.Threading.Timer(_ => Check(), null, preview ? Timeout.InfiniteTimeSpan : TimeSpan.FromSeconds(2), TimeSpan.FromHours(1));
     }
 
-    public void Check() => _ = CheckAsync();
-    async Task CheckAsync()
+    /// <summary>Automatic checks wait while Civ is open (no server requests then); a click on Check for updates is the
+    /// user's own request and asks the site at once (one small read, nothing uploaded).</summary>
+    public void Check(bool asked = false) => _ = CheckAsync(asked);
+    async Task CheckAsync(bool asked)
     {
-        if (!CanCheck() || UploadPolicy.CivRunning()) return;
+        if (!asked && (!CanCheck() || UploadPolicy.CivRunning())) { lock (gate) waited = true; return; }
         if (Interlocked.Exchange(ref checking, 1) != 0) return;
         try
         {
@@ -41,7 +44,7 @@ sealed class ReleaseNotifications : IDisposable
             JsonObject? toast = null;
             lock (gate)
             {
-                available = release; checkedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); error = null;
+                available = release; checkedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); error = null; waited = false;
                 if (release is not null && notify() && !Snoozed(release.Version) && preferences.Str("notified") != release.Version)
                 {
                     preferences["notified"] = release.Version; Save();
@@ -85,7 +88,7 @@ sealed class ReleaseNotifications : IDisposable
         lock (gate)
         {
             var release = available;
-            return J.Obj(("current", version), ("checking", checking != 0), ("checkedAt", checkedAt), ("error", error),
+            return J.Obj(("current", version), ("checking", checking != 0), ("checkedAt", checkedAt), ("error", error), ("waited", waited),
                 ("available", release is null ? null : J.Obj(("version", release.Version), ("required", release.Required),
                     ("url", release.DownloadUrl), ("notes", J.Arr(release.Notes.Select(n => (JsonNode?)JsonValue.Create(n)))),
                     ("later", Snoozed(release.Version) ? preferences.Str("later") : null))), ("changelog", new JsonArray()));

@@ -66,6 +66,7 @@ const Mock = (() => {
     finishwaits: {label:'Livestreamed game · finish waits for the main menu',apply:s=>{scenarios.replaycontrols.apply(s);Object.assign(s.games[0],{turns:46,firstTurn:1,lastTurn:46,status:'streamed',ended:true,sentSaves:47,queuedSaves:0,waitsForMenu:true,
       uploadWaitReason:'Civ is still open in a game or a lobby. The replay is made by itself once Civ is at its main menu or closed.',uploadSchedule:{state:'upload',enabled:true,ended:true,held:false,hidden:false},
       replay:{state:'recording',lastTurn:46,saves:47,processed:0,finishAt:Date.now()+55*60e3,keepShort:false,private:true,completionQueued:true,publicRequested:true}});}},
+    updatewait: {label:'Updates · automatic check waits for Civ',apply:s=>{scenarios.safeCapture.apply(s);s.updates={...s.updates,available:null,checking:false,checkedAt:Date.now()-5*H,waited:true};}},
     streamready: {label:'Experimental stream · ready',apply:s=>{scenarios.recording.apply(s);s.livestream={active:false,canStart:true};s.live=true;s.production=true;}},
     streaming: {label:'Private livestream · active',apply:s=>{scenarios.streamready.apply(s);s.livestream={active:true,canStart:false,url:'https://ffaciv.com/replay/live/private-example',viewers:2};}},
     unsupportedbackup: { label: 'Unsupported build backup · example data', apply: s => {
@@ -282,7 +283,7 @@ const Mock = (() => {
         s.deleted = s.deleted.filter(x => x !== d); s.games.unshift(d.card); s.games.sort((x, y) => (y.date ?? 0) - (x.date ?? 0));
         return {toast:{kind:'good',title:'Recording brought back',text:'It is in your list again, with the visibility it had before.'}}; }
       case 'showSaves': return {};
-      case 'checkUpdates': s.updates.checkedAt=Date.now(); return {};
+      case 'checkUpdates': s.updates.checkedAt=Date.now(); s.updates.waited=false; return {};
       case 'keepShortGame': {const g=find(a.game);if(g) g.replay={...g.replay,keepShort:true};return {};}
       case 'completeGame': {const g=find(a.game);if(g) g.replay={...g.replay,state:'processing',processed:0};return {};}
       case 'replayChoice': {const g=find(a.game);if(g) {if('private' in a) g.private=a.private;if('restricted' in a) g.restrictedUntil=a.restricted?Date.now()+14*24*H:null;}return {toast:{kind:'good',title:'Replay access updated',text:'Your game card now shows its visibility.'}};}

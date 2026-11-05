@@ -1,4 +1,4 @@
-FFACiv Recorder 0.7.25 - data and privacy information
+FFACiv Recorder 0.7.26 - data and privacy information
 
 CAPTURE
 By default the recorder watches Civ autosave folders and copies settled saves.

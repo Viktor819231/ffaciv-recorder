@@ -964,7 +964,7 @@ sealed partial class LiveBackend : IRecorderBackend
             case "recordAnyway":
                 session.RecordThisSinglePlayerGame();
                 return J.Obj(("toast", J.Toast("good", "Recording this single-player game", "Only this one. Single-player games stay off in Settings.")));
-            case "checkUpdates": releases.Check(); return null;
+            case "checkUpdates": releases.Check(asked: true); return null;
             case "updateNow": WebUi.OpenExternal(releases.DownloadUrl); return null;
             case "updateLater": releases.Later(args.Str("when") ?? "tomorrow"); return null;
             case "deleteGame":

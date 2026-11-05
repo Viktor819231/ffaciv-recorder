@@ -1,0 +1,7 @@
+FFACiv Recorder 0.7.26 / UI31
+
+- Check for updates now really checks. Before, while Civ was open, the click did nothing and the Updates screen kept
+  saying "You have the newest version" from the last check, even when a newer recorder was out.
+- Automatic hourly checks still wait while Civ is open; the Updates screen now says so instead of "newest version".
+
+Unsigned beta, the same as 0.7.25. Installing over the current recorder keeps settings and recordings.

@@ -1,5 +1,13 @@
 # FFACiv Recorder
 
+## 0.7.26 — Check for updates really checks
+
+The user, 2026-11-04: the Updates screen said "You have the newest version 0.7.23" after 0.7.25 was out. Automatic
+release checks skip while Civ is open (no server requests then), and the button was skipped the same way, so the screen
+kept an answer from before the release. Now a click on Check for updates asks the site at once (one small read of
+`config`, nothing uploaded); automatic checks still wait, and a skipped one makes the screen say "No newer version at
+the last check" + "Automatic checks wait while Civ is open" (`updates.waited`; mock scenario `updatewait`).
+
 ## 0.7.25 — Make public means public now
 
 The user, 2026-11-04: "when i make public its actually will be made public". After a livestreamed game, Finish & make
