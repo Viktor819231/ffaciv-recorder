@@ -23,4 +23,16 @@ public sealed class RehostMenuTests
             Assert.Equal("Civ V",state.Game); Assert.Equal("BNW",state.Layout);
         }
     }
+
+    [Fact]
+    public void ClosingCivAfterTheGameReturnedToTheLobbyLeavesNoLobbyCard()
+    {
+        // 2026-11-08: the game ended in the staging room, Civ closed a second later, the "Multiplayer lobby" card stayed 14 hours
+        var lobby = new LobbySnapshot { GameStarted=false, GameType=1, GameName="ffa dlc", Slots=[new LobbySlot {Id=0,Status=3}] };
+        var state = new RecorderStatus { Game="Civ V", Layout="BNW", CivDetected=true, MenuObservedAt=1 }.InLobby(lobby);
+        state = state.CivGone();
+        Assert.Null(state.Lobby); Assert.False(state.CivDetected); Assert.Null(state.MenuObservedAt);
+        Assert.Null(state.Game); Assert.Null(state.Layout); Assert.False(state.Recording);
+        Assert.Equal("Waiting for Civilization V to start",state.State);
+    }
 }

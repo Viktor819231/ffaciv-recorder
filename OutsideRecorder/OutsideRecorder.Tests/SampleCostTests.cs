@@ -20,6 +20,28 @@ public sealed class SampleCostTests(ITestOutputHelper output)
     public void ThePaceSlowsDownOnlyWhenALookIsExpensive(int wanted, double lookMs, int interval) =>
         Assert.Equal(interval, RecorderSession.IntervalFor(wanted, lookMs));
 
+    [Theory]
+    [InlineData(250, 1_493_865.4)]    // the real average of 2026-11-07, which meant 4 h 9 min between looks
+    [InlineData(50, 1e12)]
+    public void HoweverSlowALook_CivIsLookedForWithinHalfAMinute(int wanted, double lookMs) =>
+        Assert.Equal(RecorderSession.MaxIntervalMs, RecorderSession.IntervalFor(wanted, lookMs));
+
+    [Fact]
+    public void APcSleepDuringALookDoesNotCount()
+    {
+        const double nineHours = 33_105_000;
+        Assert.Equal(25, RecorderSession.NextLookAverage(25, nineHours));
+        Assert.Equal(0, RecorderSession.NextLookAverage(0, nineHours));   // even as the very first look
+    }
+
+    [Fact]
+    public void RealLooksStillMoveTheAverage()
+    {
+        Assert.Equal(25, RecorderSession.NextLookAverage(0, 25));
+        Assert.Equal(25 * 0.95 + 500 * 0.05, RecorderSession.NextLookAverage(25, 500), 6);
+        Assert.Equal(25 * 0.95 + 9_000 * 0.05, RecorderSession.NextLookAverage(25, 9_000), 6);
+    }
+
     [Fact]
     public void TwentyLooksASecondByDefault()
     {

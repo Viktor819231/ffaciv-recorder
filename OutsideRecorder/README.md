@@ -1,5 +1,24 @@
 # FFACiv Recorder
 
+## 0.7.27 — A PC sleep no longer stops the recorder; much less CPU
+
+The user, 2026-11-07: "why is the recorder not detecting civ?", in a live game at turn 95. The capture loop's clock counts
+through PC sleep, so a sleep that began during a look made one look last 9 h 11 min, and `IntervalFor` (10 % of one core)
+then waited over 4 hours between looks: Civ was never searched for and no saves were copied, while the window said
+Waiting for Civ and Everything is fine. Now `NextLookAverage` leaves out anything over `LongestLookMs` (10 s) and
+`IntervalFor` never exceeds `MaxIntervalMs` (30 s). Turning the recorder off and on did not wake the loop; only Quit did.
+
+Same day, "why is it so cpu expensive?": over half of the recorder's CPU was `UploadPolicy.CivRunning`. Each call made Windows
+list all processes and threads three times (once per Civ exe name, 28 ms of CPU in all), several times a second and once
+per game in `FactsOf`. One answer now serves all callers for 2 s (`FreshAnswer`), and `GameFinder.CivProcesses` makes one
+pass. `AutosaveCheck.CivRunning` stays uncached on purpose: it guards the write to Civ's settings file.
+
+Simple setup (the user, 2026-11-08: "the barrier to get started is a bit much", "barebones, no local parsing and no memory
+logs, just upload"): the first setup page offers **Simple setup** or **Choose each setting** (the old 7 pages). Simple
+setup (`simpleSetup` → `CapturePreferences.ApplySimpleSetup`) sets automatic save copies, memory logs off, whole saves
+(the site parses them), uploads after the game and automatic uploads on, then shows one page with Civ's autosave check
+and Finish setup. UI 32.
+
 ## 0.7.26 — Check for updates really checks
 
 The user, 2026-11-04: the Updates screen said "You have the newest version 0.7.23" after 0.7.25 was out. Automatic

@@ -250,6 +250,7 @@ const Mock = (() => {
   function handle(cmd, a = {}) {
     const s = state, cur = s.current;
     switch (cmd) {
+      case 'simpleSetup': Object.assign(s.settings,{recording:true,experimentalMemoryOptIn:false,trackLogs:false,captureMoves:false,saveUpload:'full',uploadTiming:'after',stream:true});return {toast:{kind:'good',title:'Simple setup chosen',text:'The recorder copies Civ’s autosaves and uploads them after the game. Nothing reads Civ’s memory.'}};
       case 'setUploadFormat': if(!['delta','full'].includes(a.format))return {};s.settings.saveUpload=a.format;return {toast:{kind:'good',title:'Upload method saved',text:a.format==='delta'?'Save changes will be prepared locally. The site still generates the replay.':'Complete save files will be sent for the site to process.'}};
       case 'setMemoryLogging': {if(a.enabled && s.settings.recording===false)return {toast:{kind:'warn',title:'Automatic recording is off',text:'Turn it on before adding memory logs.'}};s.settings.trackLogs=!!a.enabled;s.memoryLogging={enabled:!!a.enabled,canEnable:s.settings.recording!==false,reason:'Needs a supported Civ build. Resource controls still apply.',scope:'game capture',readsPerSecond:4,cityManagementIntervalMs:1000,turnQuietMs:5000};return {toast:{kind:'good',title:a.enabled?'Memory logs enabled':'Memory logs off',text:a.enabled?'Read-only observations are enabled for supported games. Upload and livestream preferences are unchanged.':'Your save files are still recorded.'}};}
       case 'setCaptureMethod': {

@@ -70,4 +70,22 @@ public sealed class CapturePreferencesTests : IDisposable
     [InlineData("unknown", "delta")]
     public void UploadMethodDefaultsToSmallerLocalPreparation(string? value, string expected)
         => Assert.Equal(expected, CapturePreferences.Format(new JsonObject { ["saveUpload"] = value }));
+
+    [Fact]
+    public void SimpleSetupCopiesSavesAndUploadsThemWholeAfterTheGameWithoutMemory()
+    {
+        using var session = Session();
+        var settings = new JsonObject { ["experimentalMemoryOptIn"] = true, ["trackLogs"] = true, ["captureMoves"] = true,
+            ["recording"] = false, ["saveUpload"] = "delta", ["uploadTiming"] = "during", ["stream"] = false, ["startWithWindows"] = true };
+        CapturePreferences.ApplySimpleSetup(settings);
+        CapturePreferences.Apply(session, settings, false);
+        Assert.True(session.RecordingEnabled);
+        Assert.False(session.TrackLogs);
+        Assert.False(session.AllowExperimentalMemoryLogging);
+        Assert.False(CapturePreferences.MemoryRequested(settings));
+        Assert.Equal("full", CapturePreferences.Format(settings));
+        Assert.False(CapturePreferences.UploadDuringPlay(settings));
+        Assert.True(settings["stream"]!.GetValue<bool>());
+        Assert.True(settings["startWithWindows"]!.GetValue<bool>());
+    }
 }

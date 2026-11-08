@@ -1,0 +1,15 @@
+FFACiv Recorder 0.7.27 / UI32
+
+- New: Simple setup. The first screen now offers one click that copies Civ's autosaves and uploads them after each
+  game, with no memory reading and nothing processed on your PC, then checks Civ's autosave setting. The full
+  step-by-step setup is still there under "Choose each setting".
+- Fixed: the recorder could stop noticing Civ after the PC slept. If the PC went to sleep at the exact moment the
+  recorder was looking at Civ, it counted the whole sleep as one very slow look and then waited hours between looks,
+  showing "Waiting for Civ" during a game and not saving anything. Now it never waits more than 30 seconds.
+- Much lighter on the CPU: checking whether Civ is open was the recorder's biggest cost, because Windows lists every
+  program on the PC each time and the recorder asked several times a second. It now asks once every 2 seconds.
+- Fixed: a "Multiplayer lobby" card stayed after Civ was closed. When a game ended back in the lobby and Civ was then
+  closed, the recorder kept showing that lobby until it was restarted. It now clears as soon as Civ closes, also while
+  the PC is busy.
+
+Unsigned beta, the same as 0.7.26. Installing over the current recorder keeps settings and recordings.

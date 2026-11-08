@@ -51,6 +51,14 @@ public sealed record RecorderStatus
         State="Civ found; waiting for a game",
     };
 
+    /// <summary>Civ is gone (closed, crashed or let go): nothing it showed stays on screen, the staging room included
+    /// (a game that ended in the lobby and then Civ closed kept a "Multiplayer lobby" card for hours, 2026-11-08).</summary>
+    public RecorderStatus CivGone() => this with
+    {
+        CivDetected=false, State="Waiting for Civilization V to start", Recording=false, Game=null, MyUnits=0, MyCities=0,
+        Layout=null, Identity=null, Players=[], ActivePlayer=null, Lobby=null, MenuObservedAt=null,
+    };
+
     /// <summary>The in-game FFACiv Recorder is installed or loaded (a warning is shown).</summary>
     public bool InGameRecorderPresent { get; init; }
     /// <summary>Last unexpected error (the recorder keeps going), or null.</summary>
@@ -213,11 +221,21 @@ public sealed class RecorderSession : IDisposable
     volatile int sampleMs;
     /// <summary>The share of one core the looks may use before the recorder slows down by itself.</summary>
     public const double MaxBusy = 0.10;
+    /// <summary>The longest wait between looks: slowing down must never mean not looking, Civ is found within this time.</summary>
+    public const int MaxIntervalMs = 30_000;
+    /// <summary>A "look" longer than this was no look: the PC slept during it and the clock kept counting.</summary>
+    public const double LongestLookMs = 10_000;
     /// <summary>Milliseconds between looks asked for (50 = 20 a second; 50..5000). Any thread.</summary>
     public int SampleMs { get => sampleMs; set => sampleMs = Math.Clamp(value, 50, 5000); }
 
-    /// <summary>The pace a look of <paramref name="lookMs"/> allows: as asked, or slower so looking stays under <see cref="MaxBusy"/>.</summary>
-    public static int IntervalFor(int wantedMs, double lookMs) => Math.Max(wantedMs, (int)Math.Ceiling(lookMs / MaxBusy));
+    /// <summary>The pace a look of <paramref name="lookMs"/> allows: as asked, or slower so looking stays under <see cref="MaxBusy"/>,
+    /// up to <see cref="MaxIntervalMs"/>.</summary>
+    public static int IntervalFor(int wantedMs, double lookMs) => Math.Max(wantedMs, (int)Math.Ceiling(Math.Min(lookMs / MaxBusy, MaxIntervalMs)));
+
+    /// <summary>The running average of what a look costs, leaving out anything over <see cref="LongestLookMs"/>: one "look" that
+    /// lasted a 9-hour PC sleep made the recorder wait 4 hours between looks and miss a whole game (2026-11-07).</summary>
+    public static double NextLookAverage(double average, double tookMs) =>
+        tookMs > LongestLookMs ? average : average <= 0 ? tookMs : average * 0.95 + tookMs * 0.05;
 
     /// <summary>Records the paused game again (it continues its own folder).</summary>
     public void ResumeGame() { pausedIdentity = null; pauseCurrent = false; filesPaused = false; }
@@ -337,6 +355,8 @@ public sealed class RecorderSession : IDisposable
                 saveOnly.Close();
                 if (Workload is { CanReadMemory: false } held)
                 {
+                    // asking Windows whether Civ still runs reads none of its memory: a busy PC must not keep a closed Civ on screen
+                    if (mem is { IsAlive: false } gone) { Detach("Civ closed", gone.ExitCode); continue; }
                     memoryWasHeld = true; memoryHeldWhy = held.Reason;
                     Diagnostics?.Activity("Memory capture deferred", held.Reason);
                     Status = Status with { State = held.Reason, LooksPerSecond = 0 };
@@ -359,7 +379,7 @@ public sealed class RecorderSession : IDisposable
             catch (Exception e) { Diagnostics?.Error("Capture loop", e); Detach("error"); Status = Status with { LastError = $"{DateTime.Now:HH:mm:ss} {e.GetType().Name}: {e.Message}" }; }
             var took = (clock.Elapsed - t0).TotalMilliseconds;
             // the pace: as asked, unless a look takes so long that it would use more than MaxBusy of one core
-            lookAvg = lookAvg <= 0 ? took : lookAvg * 0.95 + took * 0.05;
+            lookAvg = NextLookAverage(lookAvg, took);
             int target = Math.Max(Math.Max(SampleMs, Workload?.MinimumSampleMs ?? 0), RecoveryInterval());
             int interval = IntervalFor(target, lookAvg);
             Status = Status with
@@ -379,7 +399,7 @@ public sealed class RecorderSession : IDisposable
         // Check before Inspect: even build detection must not open/read the game while held.
         if (!FindCiv || !TrackLogs || recordingOff || Workload is { CanReadMemory: false }) return;
         var procs = GameFinder.CivProcesses().ToList();
-        if (procs.Count == 0) { CloseUnsupported(); Status = Status with { CivDetected = false, State = "Waiting for Civilization V to start", Game = null, Recording = false }; return; }
+        if (procs.Count == 0) { CloseUnsupported(); Status = Status.CivGone(); return; }
         Status = Status with { CivDetected = true };
         var p = procs[0];
         var f = GameFinder.Inspect(p);
@@ -987,7 +1007,7 @@ public sealed class RecorderSession : IDisposable
         else EndGame(why);
         if (mem is not null && civClosed) Notice?.Invoke("Civ closed", "The Outside Recorder waits for the next game.");
         mem?.Dispose(); mem = null; reader = null; taping = null; found = null;
-        Status = Status with { CivDetected = false, State = "Waiting for Civilization V to start", Recording = false, Game = null, MyUnits = 0, MyCities = 0, Layout = null, Identity = null, Players = [], ActivePlayer = null };
+        Status = Status.CivGone();
     }
 
     /// <inheritdoc/>

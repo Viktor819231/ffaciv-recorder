@@ -33,9 +33,18 @@ public static class GameFinder
     static readonly string[] ExeNames = ["CivilizationV", "CivilizationV_DX11", "CivilizationV_Tablet"];
     static readonly Dictionary<(string Path, long Size, DateTime Time), string> hashCache = new();
 
-    /// <summary>The running Civ V processes (normally zero or one).</summary>
-    public static IEnumerable<Process> CivProcesses() =>
-        ExeNames.SelectMany(n => Process.GetProcessesByName(n));
+    /// <summary>The running Civ V processes (normally zero or one). One pass over the process list, not one per exe name:
+    /// every pass makes Windows list all processes and threads on the PC.</summary>
+    public static IEnumerable<Process> CivProcesses()
+    {
+        var civ = new List<Process>();
+        foreach (var p in Process.GetProcesses())
+        {
+            if (ExeNames.Contains(p.ProcessName, StringComparer.OrdinalIgnoreCase)) civ.Add(p);
+            else p.Dispose();
+        }
+        return civ;
+    }
 
     /// <summary>Looks at one Civ process: its modules, the game core's file hash and loaded PE header.</summary>
     public static FoundGame Inspect(Process p)

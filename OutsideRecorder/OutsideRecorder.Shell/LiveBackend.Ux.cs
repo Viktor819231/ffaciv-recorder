@@ -472,6 +472,23 @@ sealed partial class LiveBackend
                 : "The recorder uses save copies only. Existing logs are kept; the previous recording stays local until you choose to upload it.")));
             return true;
         }
+        if (cmd == "simpleSetup")
+        {
+            var settings = ui["settings"]!.AsObject();
+            // Simple setup only turns things off, except sending: that one may not start in the middle of a game.
+            var boundary = StreamingSetupPolicy.ChangeReason(settings, "stream", JsonValue.Create(true), UploadPolicy.CivRunning(), session.Status.Lobby is not null);
+            if (boundary is not null) { result = J.Obj(("toast", J.Toast("info", "Prepare before your game", boundary))); return true; }
+            if (session.Status.Context is { } previous && session.TrackLogs) delayedUploads.KeepLocal(previous);
+            CapturePreferences.ApplySimpleSetup(settings);
+            StopLivestream();
+            session.RecordingEnabled = !SetupPending;
+            if (session.RecordingEnabled) session.ResumeGame();
+            ApplyCaptureSettings();
+            session.SampleMs = 1000;
+            SaveUi(); RestartStream(); nextChecks = nextUx = 0;
+            result = J.Obj(("toast", J.Toast("good", "Simple setup chosen", "The recorder copies Civ's autosaves and uploads them after the game. Nothing reads Civ's memory.")));
+            return true;
+        }
         if (cmd == "setUploadFormat")
         {
             var format = args.Str("format");

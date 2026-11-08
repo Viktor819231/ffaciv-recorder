@@ -16,6 +16,19 @@ static class CapturePreferences
 
     public static bool UploadDuringPlay(JsonObject settings) => settings["uploadTiming"]?.GetValue<string>() == "during";
 
+    /// <summary>Simple setup (the user, 2026-11-08: "barebones, no local parsing and no memory logs, just upload"): copy
+    /// Civ's autosaves, send them whole after the game and let the website make the replay. Nothing reads Civ's memory.</summary>
+    public static void ApplySimpleSetup(JsonObject settings)
+    {
+        settings["recording"] = true;
+        settings["experimentalMemoryOptIn"] = false;
+        settings["trackLogs"] = false;
+        settings["captureMoves"] = false;
+        settings["saveUpload"] = "full";
+        settings["uploadTiming"] = "after";
+        settings["stream"] = true;
+    }
+
     public static void ApplyUploadPolicy(UploadPolicy policy, JsonObject settings, bool setupPending)
     {
         policy.Automatic = !setupPending;
