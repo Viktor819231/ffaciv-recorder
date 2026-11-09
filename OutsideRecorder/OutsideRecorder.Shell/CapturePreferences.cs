@@ -14,6 +14,13 @@ static class CapturePreferences
 
     public static string Format(JsonObject settings) => settings["saveUpload"]?.GetValue<string>() == "full" ? "full" : "delta";
 
+    /// <summary>The player's answer to "how should old games upload?" (asked once, on the first Manual upload; the user,
+    /// 2026-11-08): "delta" (smaller, prepared on this PC) or "full" (whole saves); null until they have answered.</summary>
+    public static string? OldGamesChoice(JsonObject settings) => settings["oldGamesUpload"]?.GetValue<string>() is "delta" or "full" ? settings["oldGamesUpload"]!.GetValue<string>() : null;
+
+    /// <summary>How old games go up: the player's own answer for them, else the recording's upload method.</summary>
+    public static string OldGamesFormat(JsonObject settings) => OldGamesChoice(settings) ?? Format(settings);
+
     public static bool UploadDuringPlay(JsonObject settings) => settings["uploadTiming"]?.GetValue<string>() == "during";
 
     /// <summary>Simple setup (the user, 2026-11-08: "barebones, no local parsing and no memory logs, just upload"): copy

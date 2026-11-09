@@ -30,6 +30,22 @@ static class WebUi
         return environment;
     }
 
+    /// <summary>An error nobody else caught (errors.log beside display-errors.log; the older half goes past 1 MB). The
+    /// recorder keeps running where it can: a WinForms error dialog every few seconds helped nobody.</summary>
+    public static void LogError(string where, object? error)
+    {
+        try
+        {
+            var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FFACiv", "OutsideRecorder", "app");
+            Directory.CreateDirectory(folder);
+            var file = Path.Combine(folder, "errors.log");
+            if (File.Exists(file) && new FileInfo(file).Length > 1024 * 1024) File.Move(file, file + ".old", overwrite: true);
+            File.AppendAllText(file, $"{DateTimeOffset.Now:o} {where}: {error}\n");
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
     public static void LogStartupError(Exception error)
     {
         try

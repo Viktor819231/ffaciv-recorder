@@ -1,5 +1,81 @@
 # FFACiv Recorder
 
+## 0.7.28 — Records on a busy PC; reliability round (2026-11-09)
+
+The user, 2026-11-09: "do an inventory of recorder program and see if we can improve the code ... and see if you find
+any bugs". Found by reading the whole program; each fix has a test in `ReliabilityTests` (or an existing one).
+
+Uploads: a recording the site refuses for good (a 4xx such as 410 "expired") rests 30 minutes (`Streamer.RefusedRest`) and
+the other recordings go on; before, every pass stopped at that game and no later game was ever sent. The same for a
+deletion the site refuses or a damaged deletion file (404/410 on delete now counts as done, a local copy that cannot be
+removed stays). A `stream.json` another program holds is no longer read as "nothing sent" (that made the next write drop
+the list of sent saves); a damaged one is kept as `stream.json.damaged`. A PC sleep during a request no longer stops
+uploads until a restart (the safe-capture watchdog takes a long gap between its own looks for a sleep). Saves already on
+the site cost nothing per pass, the folder listing gives each save's time (no extra call per save), and finished
+recordings ask the site for their replay state every 10 minutes instead of every 15 s (`SettledPoll`). A 401 keeps the
+old install key as `install.json.old`; two calls that could run before registering register first.
+
+Capture: a failing clean-up (full disk, locked games.json) no longer ends the capture thread and with it the program.
+`capture-ended` is written once, not every second while Civ is closed. KEK saves are left out at once (no 30 retries and
+false error). A save folder that is missing for a moment (OneDrive offline) no longer makes every old save in it count as
+new. Only the save's own two folders decide "single player" (a Windows user called Single lost multiplayer saves).
+`games.json` that cannot be read right now is never replaced by a shorter list; a damaged one is kept beside. Replaced
+files are flushed to disk before the rename (no file full of zeros after a power cut). Session folder names use Western
+digits on every Windows language.
+
+Window: while it is hidden or minimised only the timed work and the tray icon run (`BuildTrayState`), not the whole
+window state every 3 s. Recording starts even when the window (WebView2) fails to start; the tray shows attention. A
+start with Windows no longer opens a window that was closed maximised. Unexpected errors go to `app/errors.log` instead
+of WinForms dialogs; a wrong-typed saved setting keeps its default. The page keeps open sections and drop-down lists
+across refreshes, Minimize to tray no longer ends in "Still waiting for confirmation", Simple setup shows its page only
+when the recorder took it ("Prepare before your game" refusals are warnings now), dates are English everywhere, games
+only on the site sort by date and show their real visibility, pop-ups with buttons stay as long as their time bar says.
+
+Second part, same day (the user: "ok fix this all"): Delete hides the replay on the website at once, also mid-game
+(`HideHeldDeletionsNowAsync`, like Make private since 0.7.25). The "hidden 2 hours" reservation is sent only when the saves
+can follow it; on the site, a reservation that got no save yet waits 3 days instead of being deleted as a short game after
+one quiet hour (`tools/site/pages/lib/recorder-lifecycle.js` `EmptyWait`, needs a Pages deploy). Old games: save MD5s are
+kept in `old-md5.json` (`SaveFingerprints`), so a start no longer reads every autosave on the PC again and an upload that
+goes on after a pause skips the saves it sent without opening them; a changed setting no longer breaks a running old-game
+upload. Also in this release: the first manual upload asks once how old games go up (Smaller upload / Whole saves).
+
+Code: the first prototype window (`OutsideRecorder.App`, `FFACivOutsideRecorder.exe`) is gone; its `--check` and
+`--replay-tape` are developer-only options of `FFACivRecorder.exe` (`DevTools.cs`). `Streamer` is split by topic
+(`Streamer.cs` loop and watchdog, `.Http`, `.Events`, `.Saves`, `.Progress`), `LiveBackend` too (`LiveBackend.cs` core,
+`.Commands`, `.State`, `.Settings`, `.Library`, `.Uploads`, `.Livestream`, `.Toasts`, `.Deletion`, `.Report`); one
+`MayUploadGame` gate, one `GameIndex.IsContext`, one deletion key/file.
+
+The window's page is split into small files (ui/js: format, widgets, streaming, recordings, oldgames, home, screens,
+dialogs, setup; app.js keeps the shared state `ui`, drawing and input), loaded in order by index.html. The old non-live
+screens (publish countdown, Withdraw, Block, watch requests) are gone, and the state no longer carries `requests` /
+`permissions`. The preview data (mock.js) has the shape the program really sends. A button or switch whose command is
+waiting keeps the keyboard focus; the brand mark shows the same five looks as the tray icon. Tests: `node --test
+OutsideRecorder/tests/*.test.mjs`, plus the three `tests/*.browser.js` checks through tools/site/shot.mjs.
+
+A busy PC (the user's screenshot, 2026-11-09: a multiplayer game at turn 5 showed "Civ detected · waiting for a game" and
+was not recorded): the window says "Your PC is busy — the recorder holds back" (attention) instead of hiding it, and a
+recording in progress keeps saying so, also during the pause after each new turn (it used to flip to "Waiting for Civ").
+Behind it: a busy computer slowed memory reading to nothing (system CPU over 85 % stopped it until 8 s under 65 %, which a
+running game rarely gives) and with it the autosave copies, and saves arriving with no recording open were dropped. Now a
+busy computer slows reading to one look a second (only the 5-second pause after a new turn stops it), autosaves are
+noticed in every state and copied even on a busy PC (`WorkloadPolicy.CanCopySaves`: only that turn pause holds a copy),
+and a save with no memory recording open is kept as a files-only capture like Simple setup (unless the game is paused,
+deleted, or a single-player save with single player off). Uploads and parsing still wait for a calm PC.
+
+After the game = Civ closed (the user, 2026-11-09: "upload when civ is not running but going public after 2 hours"): with
+upload timing After the game, Civ's main menu no longer counts as "not playing" (`UploadPolicy.IsPlaying` in LiveBackend;
+While playing keeps the main-menu rule for older saves of a livestream), and the two hidden hours start when the upload
+begins (`DelayedUploads.MarkHold("hidden")` moves `DueAt` to now + 2 h unless a longer wait was chosen). Window, READ-ME,
+PRIVACY and the public README say "once Civ is closed".
+
+Capture engine tidy-up: one opening check, snapshot builder, list walker and unit reader in `StateReader`;
+`TapeReplay.ReaderFor` for every tape replay; memory reads go straight into the caller's buffer (no 5 MB copy per look);
+`ProcessMemory` holds a `SafeProcessHandle` (still read + limited query only); resource samples carry a monotonic tick (a
+clock step back no longer freezes the busy-PC rules); an unreadable map pointer is "no game", not a version mismatch; the
+lobby card clears and comes back correctly; rejoining a game's `events.jsonl` finds the last sequence and turn behind lines
+of any length; `RecorderSession` copies saves through one helper (unhandled ones go back to the queue on an error) and
+`Sample()` is split into named steps.
+
 ## 0.7.27 — A PC sleep no longer stops the recorder; much less CPU
 
 The user, 2026-11-07: "why is the recorder not detecting civ?", in a live game at turn 95. The capture loop's clock counts
@@ -401,7 +477,10 @@ by this implementation.
 Home has a recorder on/off button, manual upload and the two most recent games.
 Manual upload selects whole games from a folder; **Generate and store replay**
 explicitly keeps them, shows uploaded/processed saves, then links to each game
-page after packaging. Games offers private (unlisted) and fourteen-day replay
+page after packaging. The first manual upload asks once how old games go up: **Smaller upload**
+(changes prepared on this PC, recommended) or **Whole saves** (the site does all the work); the answer is kept
+(`oldGamesUpload` in the window settings, `CapturePreferences.OldGamesFormat`) and the **Upload size** switch next to
+the button changes it. Until answered, old games follow the recording's upload method. Games offers private (unlisted) and fourteen-day replay
 restriction (listed page, locked replay) choices; either can be changed later.
 
 Mark a recording done, or let one hour without a received save or log finish it.
@@ -437,7 +516,9 @@ failed micro read does not discard city health/population. Reloads reset the mic
 samples can be missed. This is state sampling, not a click log. The raw events use the existing upload path. The live feed
 and saved-replay importer now retain this state for the shared realtime viewer's city panel, following pause and rewind.
 Only observers and the owning team receive city internals. Existing logs without these observations remain unknown.
-New diagnostic tapes use reads version 3; versions 1/2 keep their original collection behavior.
+New diagnostic tapes use reads version 4 (2026-11-09: unit/civ names that failed to read are asked again, a new turn's
+timer start is read at once); versions 1–3 replay exactly as recorded. A tape continued after the recorder was killed is
+read part by part (the cut part up to its cut, then the rest).
 
 This webport-based workspace includes the recorder baseline from `outside-recorder` at `4f95e317`, since that standalone
 project was not yet on webport. The installed recorder is not replaced by merging these source changes.
@@ -451,8 +532,8 @@ Research and results: [docs/research/OUTSIDE-RECORDER.md](../docs/research/OUTSI
 
 ## Use
 
-Start `FFACivOutsideRecorder.exe` (Desktop: "Outside Recorder.cmd"), then play. Close its window to stop.
-Recordings: `%LOCALAPPDATA%\FFACiv\OutsideRecorder\session-<time>-<pid>\` with `events.jsonl`, `tape.bin.gz`, `saves\` (a copy of
+The recorder is `FFACivRecorder.exe` (OutsideRecorder.Shell; the first prototype window `FFACivOutsideRecorder.exe` was
+removed on 2026-11-09). Recordings: `%LOCALAPPDATA%\FFACiv\OutsideRecorder\session-<time>-<pid>\` with `events.jsonl`, `tape.bin.gz`, `saves\` (a copy of
 each autosave) and `stream.json` (how far the stream got). `games.json` maps each game (its seeds) to its folder, so the same
 game coming back (reload, rejoin, Civ or recorder restarted) continues its folder and its stream.
 
@@ -487,9 +568,9 @@ corner pop-ups (Civ found / recording / saved / problems; none per turn). Start 
 `--tray`; switch in Settings). Test build: stream = local by default (`settings.txt` next to the exe; the window's
 "Live stream to the test server" switch turns it on/off), every recording kept on this PC, "Get livestream link" =
 `<live_site_url>live/<game>/watch` (OR03 "Feed"; `live_site_url = http://127.0.0.1:5632/replay/`). Going public, postpone,
-watch requests, updates and Steam keep their screens with "Not in the test build". The old `FFACivOutsideRecorder.exe`
-window stays as a check/debug tool (`--check`, `--replay-tape`, `--stream-test`).
-Published to `out/recorder-test/` (old tool in `check-tool/`); Desktop "2 Start recorder.cmd" starts it.
+watch requests, updates and Steam keep their screens with "Not in the test build". Developer builds (never the
+installer) take `--check` (one look at Civ, printed), `--replay-tape <session folder>` and `--stream-test` (`DevTools.cs`).
+Published to `out/recorder-test/`; Desktop "2 Start recorder.cmd" starts it.
 
 ```bash
 ./dn.sh publish OutsideRecorder/OutsideRecorder.Shell -c Release -o out/recorder-test
@@ -524,7 +605,8 @@ Details, tests, AOT estimate: [docs/spec/OR04-installer.md](../docs/spec/OR04-in
 * `OutsideRecorder.Core` — find Civ (`GameFinder`), read it (`ProcessMemory`, `StateReader`, offsets in `Layouts.cs`),
   turn samples into events (`Differ`, incl. the swap rule; `GamePipeline`, reloads/menus), JSONL (`JsonlRecording`),
   tape (`Tape.cs`, `TapeReplay`), memory copy (`MemoryDump`), autosaves (`AutosaveWatcher`), the loop (`RecorderSession`).
-* `OutsideRecorder.App` — the window and pop-ups (WinForms, .NET 10).
+* `OutsideRecorder.Shell` — the program: the window (WebView2 showing `ui/`), tray icon and pop-ups (WinForms, .NET 10),
+  `LiveBackend` (state and commands), uploads scheduling, old games, livestream.
 * `OutsideRecorder.Tests` — xunit; `EvidenceTests` ties every layout value to `layouts/evidence-*.txt`,
   `LayoutPdbTests` re-checks Lekmod against its PDB, `SnowveLayoutTests` each Snowve release against its PDB (DLL + PDB from the
   Snowve git tag in `out/snowve-bin/<version>/` or `SNOWVE_BIN`; every PDB record of a class must agree), `Round2Tests` covers tape/replay/reloads/drops.
@@ -537,7 +619,7 @@ Details, tests, AOT estimate: [docs/spec/OR04-installer.md](../docs/spec/OR04-in
 
 ```bash
 ./dn.sh test OutsideRecorder/OutsideRecorder.Tests
-./dn.sh publish OutsideRecorder/OutsideRecorder.App -c Release -o out/outside-recorder
+./dn.sh publish OutsideRecorder/OutsideRecorder.Shell -c Release -o out/recorder-test
 ```
 
 ## Adding another game version

@@ -6,6 +6,10 @@ namespace OutsideRecorderCore;
 /// <summary>A resource pause leaves queued files and acknowledgements untouched for a later pass.</summary>
 public sealed class WorkDeferredException(string message) : HttpRequestException(message);
 
+/// <summary>The site refused one request about one recording for good (a 400-range answer that is not about the whole
+/// install or timing): that recording waits, the others go on.</summary>
+public sealed class SiteRefusedException(string message, System.Net.HttpStatusCode status) : HttpRequestException(message, null, status);
+
 /// <summary>Paces request bodies across all senders; counts body bytes handed to HTTP, including retries.</summary>
 public sealed class UploadBudget
 {

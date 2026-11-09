@@ -1,17 +1,41 @@
+#if !RECORDER_PUBLIC_RELEASE
 using System.Diagnostics;
 using OutsideRecorderCore;
 
-namespace OutsideRecorder;
+namespace OutsideRecorderShell;
 
-/// <summary>"FFACivOutsideRecorder.exe --check": one look at Civ, printed (no window, no recording).</summary>
-static class Check
+/// <summary>
+/// Developer builds only (never in the installer): the two command-line tools of the old FFACivOutsideRecorder.exe window,
+/// which was removed on 2026-11-09 (nothing built, shipped or tested it any more).
+///   --check                        one look at Civ, printed (no window, no recording)
+///   --replay-tape &lt;session folder&gt;  re-reads a recorded tape with this version, writes events.replay.jsonl next to it
+/// </summary>
+static class DevTools
 {
-    public static int Run()
+    public static int Run(string[] args)
+    {
+        int rt = Array.IndexOf(args, "--replay-tape");
+        if (rt >= 0)
+        {
+            if (rt + 1 >= args.Length) { Console.WriteLine("usage: --replay-tape <session folder>"); return 2; }
+            try
+            {
+                var (samples, lines, output) = TapeReplay.Run(args[rt + 1]);
+                Console.WriteLine($"replayed {samples} samples -> {lines} lines in {output}");
+                return 0;
+            }
+            catch (Exception e) { Console.WriteLine("replay failed: " + e.Message); return 2; }
+        }
+        return Check();
+    }
+
+    static int Check()
     {
         var civs = GameFinder.CivProcesses().ToList();
         Console.WriteLine($"Civ processes: {civs.Count}");
         foreach (var p in civs)
         {
+            using var process = p;
             var f = GameFinder.Inspect(p);
             Console.WriteLine($"pid {f.ProcessId} {f.ExeName}: {f.Status}");
             if (f.GameCore is { } core) Console.WriteLine($"  core {core.Path} base=0x{core.Base:X8} size=0x{core.Size:X} sha256={f.GameCoreSha256}");
@@ -38,3 +62,4 @@ static class Check
         return 0;
     }
 }
+#endif

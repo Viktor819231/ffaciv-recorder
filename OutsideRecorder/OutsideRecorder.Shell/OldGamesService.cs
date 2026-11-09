@@ -19,7 +19,9 @@ sealed class OldGamesService(RecorderSettings settings, Func<Streamer?> streamer
     readonly CancellationTokenSource lifetime = new();
     readonly object gate = new();
     readonly string foldersFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FFACiv", "OutsideRecorder", "app", "old-folders.txt");
-    readonly Dictionary<string, string> md5Cache = [];
+    SaveFingerprints? fingerprints;
+    /// <summary>The MD5s of saves read before, also from earlier runs (made on first use: the output folder is known by then).</summary>
+    SaveFingerprints Prints => fingerprints ??= new SaveFingerprints(settings.OutputFolder);
     List<OldGame> games = [];
     Dictionary<string, int> already = [];            // game id → saves this PC already sent
     readonly Dictionary<string, (string State, int Done, int Total, string? Note)> progress = [];
@@ -63,13 +65,14 @@ sealed class OldGamesService(RecorderSettings settings, Func<Streamer?> streamer
                         var found = OldGameScanner.Group(saves, MayWork).Where(g => !OldGameScanner.NotOffered(g)).ToList();
                         var known = Known();
                         var counts = found.ToDictionary(g => g.Id, g => g.Saves.Count(s => Md5Of(s) is { } m && known.Contains(m)));
+                        Prints.Save();
                         CheckWork();
                         lock (gate) { games = found; already = counts; scannedAt = DateTime.Now; scanned = true; }
                         foreach (var (id, state) in OldGameUploader.LoadAll(settings.OutputFolder).Where(x => x.Value.Processed))
                         { lock (gate) if (generation.ContainsKey(id) || progress.ContainsKey(id)) continue; _ = TrackGeneration(id, lifetime.Token); }
                         break;
                     }
-                    catch (WorkDeferredException) { await Task.Delay(2000, lifetime.Token); }
+                    catch (WorkDeferredException) { Prints.Save(); await Task.Delay(2000, lifetime.Token); }
                 }
             }
             catch { }
@@ -80,9 +83,8 @@ sealed class OldGamesService(RecorderSettings settings, Func<Streamer?> streamer
     string? Md5Of(OldSave s)
     {
         CheckWork();
-        var key = $"{s.Key}|{s.Size}|{s.TimeUtc.Ticks}";
-        lock (md5Cache) if (md5Cache.TryGetValue(key, out var m)) return m;
-        try { CheckWork(); var m = OldGameScanner.Md5(s.Read()); lock (md5Cache) md5Cache[key] = m; return m; }
+        if (Prints.Known(s) is { } m) return m;
+        try { CheckWork(); return Prints.Of(s, s.Read()); }
         catch (WorkDeferredException) { throw; }
         catch { return null; }
     }
@@ -171,7 +173,7 @@ sealed class OldGamesService(RecorderSettings settings, Func<Streamer?> streamer
                         }
                         try
                         {
-                            (sent, skipped) = await new OldGameUploader(UploadSettings?.Invoke() ?? settings, s).UploadAsync(game, new HashSet<string>(),
+                            (sent, skipped) = await new OldGameUploader(UploadSettings?.Invoke() ?? settings, s, Prints).UploadAsync(game, new HashSet<string>(),
                                 (d, t) => { lock (gate) progress[id] = ("uploading", Math.Max(progress[id].Done, d), t, null); }, ct);
                             break;
                         }
@@ -179,6 +181,11 @@ sealed class OldGamesService(RecorderSettings settings, Func<Streamer?> streamer
                         {
                             lock (gate) progress[id] = ("queued", progress[id].Done, game.Saves.Count, "Paused to leave resources for the game. Upload resumes automatically.");
                             await Task.Delay(2000, ct);
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            // a changed setting started the sender again and closed the old one under this upload: go on with the new one
+                            await Task.Delay(500, ct);
                         }
                     }
                     lock (gate) progress[id] = ("processing", 0, game.Saves.Count, $"All {game.Saves.Count} saves received. Waiting for server parsing…");
@@ -195,6 +202,7 @@ sealed class OldGamesService(RecorderSettings settings, Func<Streamer?> streamer
 
     async Task TrackGeneration(string id, CancellationToken ct)
     {
+        int wait = 5000;
         while (!ct.IsCancellationRequested)
         {
             try
@@ -211,6 +219,8 @@ sealed class OldGamesService(RecorderSettings settings, Func<Streamer?> streamer
                     progress[id] = (phase == "ready" ? "done" : phase is "unsupported" or "error" ? phase : "processing", state["processed"]?.GetValue<int>() ?? 0,
                         state["saves"]?.GetValue<int>() ?? 0, generation[id]["note"]?.GetValue<string>());
                     if (phase is "ready" or "error") return;
+                    // waiting for the site to support this mod version takes days, a busy server minutes: no ask every 5 s
+                    wait = phase switch { "unsupported" => 600_000, "held" => 60_000, _ => 5000 };
                 }
             }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
@@ -218,7 +228,7 @@ sealed class OldGamesService(RecorderSettings settings, Func<Streamer?> streamer
                 if (ct.IsCancellationRequested) return;
                 lock (gate) if (progress.TryGetValue(id, out var p)) progress[id] = (p.State, p.Done, p.Total, "Connection interrupted. Checking server progress again automatically…");
             }
-            try { await Task.Delay(5000, ct); }
+            try { await Task.Delay(wait, ct); }
             catch (OperationCanceledException) { return; }
         }
     }

@@ -77,8 +77,6 @@ public sealed record PlayerState
     public int? CivType { get; init; }
     /// <summary>Civilization key, e.g. CIVILIZATION_ARGENTINA; null when not read (stock BNW: not confirmed).</summary>
     public string? Civ { get; init; }
-    /// <summary>How many units the list held (including ones we could not read).</summary>
-    public int UnitSlots { get; init; }
 }
 
 /// <summary>Everything one sample read. Values not read are null, never guessed.</summary>
@@ -114,8 +112,6 @@ public sealed record GameSnapshot
     public required IReadOnlyList<UnitState> Units { get; init; }
     /// <summary>All cities read.</summary>
     public required IReadOnlyList<CityState> Cities { get; init; }
-    /// <summary>True for a network multiplayer game (GameType 1): the window then shows only your own numbers.</summary>
-    public bool IsMultiplayer => GameType is 1 or 3;
     /// <summary>Objects skipped because they failed a check (torn read while the game changed them).</summary>
     public int Rejected { get; init; }
 }
@@ -130,6 +126,8 @@ public sealed record TurnTimerState(bool? Enabled, int? Type, float? Seconds)
     public long? StartTicks { get; init; }
     /// <summary>The turn's length in whole seconds when the timer is on and a length is set, else null.</summary>
     public int? TurnSeconds => Enabled == true && Seconds is float f && f > 0 && f < 100_000 ? (int)Math.Round(f) : null;
+    /// <summary>The setting as the recording and lobby lines write it: enabled, type, seconds.</summary>
+    public Dictionary<string, object?> Data() => new() { ["enabled"] = Enabled, ["type"] = Type, ["seconds"] = Seconds };
 }
 
 /// <summary>One player slot in the staging room.</summary>

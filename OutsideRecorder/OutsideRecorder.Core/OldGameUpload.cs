@@ -27,8 +27,10 @@ public sealed record OldUploadState
 /// old-game), the first whole and the rest as deltas like the stream, then POST batches/&lt;id&gt;/process. Saves the
 /// server or this PC already has (same MD5) are skipped; an interrupted upload goes on where it stopped.
 /// </summary>
-public sealed class OldGameUploader(RecorderSettings settings, Streamer streamer)
+public sealed class OldGameUploader(RecorderSettings settings, Streamer streamer, SaveFingerprints? fingerprints = null)
 {
+    readonly SaveFingerprints prints = fingerprints ?? new SaveFingerprints(null);
+
     readonly object fileLock = new();
     string StateFile => Path.Combine(settings.OutputFolder, "old-uploads.json");
 
@@ -60,6 +62,12 @@ public sealed class OldGameUploader(RecorderSettings settings, Streamer streamer
     /// </summary>
     public async Task<(int Sent, int Skipped)> UploadAsync(OldGame game, ISet<string> known, Action<int, int>? progress, CancellationToken ct)
     {
+        try { return await UploadCoreAsync(game, known, progress, ct); }
+        finally { prints.Save(); }   // what was read is kept for the next try, also after a pause or a stop
+    }
+
+    async Task<(int Sent, int Skipped)> UploadCoreAsync(OldGame game, ISet<string> known, Action<int, int>? progress, CancellationToken ct)
+    {
         using var work = await streamer.EnterHeavyWorkAsync(ct);
         if (settings.SafeCapture && !streamer.CanContactServer()) throw new WorkDeferredException("Upload waits until Civ closes.");
         var all = Load();
@@ -72,7 +80,7 @@ public sealed class OldGameUploader(RecorderSettings settings, Streamer streamer
                 ct.ThrowIfCancellationRequested();
                 if (!streamer.CanContactServer() || streamer.Workload?.CanStartHeavyWork == false)
                     throw new WorkDeferredException("Upload paused while the game or computer is busy.");
-                if (state.Sent.ContainsKey(OldGameScanner.Md5(save.Read()))) continue;
+                if (state.Sent.ContainsKey(prints.Of(save))) continue;
                 state = new OldUploadState { Batch = $"old-{game.Id}-{DateTime.UtcNow:yyyyMMddHHmmss}", Sent = state.Sent };
                 break;
             }
@@ -82,8 +90,10 @@ public sealed class OldGameUploader(RecorderSettings settings, Streamer streamer
         {
             ct.ThrowIfCancellationRequested();
             if (!streamer.CanContactServer() || streamer.Workload?.CanStartHeavyWork == false) throw new WorkDeferredException("Upload paused while the game or computer is busy.");
+            // a save sent before (an upload going on after a pause) is skipped without reading it again
+            if (prints.Known(save) is { } seen && (state.Sent.ContainsKey(seen) || known.Contains(seen))) { skipped++; progress?.Invoke(++done, game.Saves.Count); continue; }
             var bytes = save.Read();
-            var md5 = OldGameScanner.Md5(bytes);
+            var md5 = prints.Of(save, bytes);
             if (state.Sent.ContainsKey(md5) || known.Contains(md5)) { skipped++; progress?.Invoke(++done, game.Saves.Count); continue; }
             string? id = null; bool asDelta = false;
             bool full = settings.SaveUpload != "delta" || state.BaseId is null || state.BaseKey is null || state.SinceFull + 1 >= settings.FullSaveEvery;
@@ -131,7 +141,7 @@ public sealed partial class Streamer
     public async Task<(bool Ok, string? Id)> PostOldSaveAsync(OldSave save, byte[] body, string? deltaBase, string batch, CancellationToken ct)
     {
         await EnsureRegisteredAsync(ct);
-        var r = await SendAsync(() =>
+        using var r = await SendAsync(() =>
         {
             var m = new HttpRequestMessage(HttpMethod.Post, "saves") { Content = new ByteArrayContent(body) };
             m.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
@@ -160,7 +170,7 @@ public sealed partial class Streamer
     public async Task ProcessBatchAsync(string batch, CancellationToken ct)
     {
         await EnsureRegisteredAsync(ct);
-        var r = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"batches/{Uri.EscapeDataString(batch)}/process")
+        using var r = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"batches/{Uri.EscapeDataString(batch)}/process")
         { Content = new StringContent("{\"store\":true}", Encoding.UTF8, "application/json") }, ct);
         if (!r.IsSuccessStatusCode) throw new HttpRequestException($"batch {batch}: {(int)r.StatusCode} {await r.Content.ReadAsStringAsync(ct)}");
     }
@@ -172,7 +182,7 @@ public sealed partial class Streamer
     public async Task<(int Status, string Body)> SetVisibilityAsync(string game, bool blocked, CancellationToken ct)
     {
         await EnsureRegisteredAsync(ct);
-        var r = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"games/{Uri.EscapeDataString(game)}/visibility")
+        using var r = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"games/{Uri.EscapeDataString(game)}/visibility")
         { Content = new StringContent(JsonSerializer.Serialize(new { blocked }), Encoding.UTF8, "application/json") }, ct);
         return ((int)r.StatusCode, await r.Content.ReadAsStringAsync(ct));
     }

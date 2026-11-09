@@ -26,13 +26,14 @@ public sealed class WorkloadPolicyTests
     };
 
     [Fact]
-    public void ShortSpikeSlowsButDoesNotPauseAndSustainedLoadDoes()
+    public void ShortSpikeSlowsAndSustainedLoadPausesHeavyWorkButOnlySlowsReading()
     {
         var policy = new WorkloadPolicy();
         policy.Observe(Sample(0, 90)); Assert.True(policy.CanStartHeavyWork); Assert.Equal(500, policy.MinimumSampleMs);
         policy.Observe(Sample(2, 20)); Assert.True(policy.CanReadMemory); Assert.Equal(50, policy.MinimumSampleMs);
         policy.Observe(Sample(4, 90)); policy.Observe(Sample(6, 90)); policy.Observe(Sample(8, 90));
-        Assert.False(policy.CanReadMemory); Assert.False(policy.CanStartHeavyWork); Assert.Equal(1000, policy.MinimumSampleMs);
+        // 2026-11-09: a busy PC used to stop reading Civ, so no recording began while Civ itself kept the CPU busy
+        Assert.True(policy.CanReadMemory); Assert.False(policy.CanStartHeavyWork); Assert.Equal(1000, policy.MinimumSampleMs);
     }
 
     [Fact]
@@ -53,7 +54,7 @@ public sealed class WorkloadPolicyTests
         var policy = new WorkloadPolicy();
         foreach (int t in new[] { 0, 2, 4 }) policy.Observe(Sample(t, 90));
         for (int t = 6; t <= 20; t += 2) policy.Observe(Sample(t, null));
-        Assert.False(policy.CanReadMemory);
+        Assert.False(policy.CanStartHeavyWork); Assert.Equal(1000, policy.MinimumSampleMs);
         var unsupported = new WorkloadPolicy(); unsupported.Observe(new() { At = Start });
         Assert.True(unsupported.CanStartHeavyWork);
     }
@@ -91,7 +92,7 @@ public sealed class WorkloadPolicyTests
         Assert.True(policy.CanStartHeavyWork); Assert.True(policy.CanReadMemory); Assert.Equal(500, policy.MinimumSampleMs);
         Assert.Contains("more slowly", policy.Reason);
         foreach (int t in new[] { 8, 10, 12 }) policy.Observe(Sample(t, 90, own: 10));
-        Assert.False(policy.CanStartHeavyWork); Assert.False(policy.CanReadMemory); Assert.Equal(1000, policy.MinimumSampleMs);
+        Assert.False(policy.CanStartHeavyWork); Assert.True(policy.CanReadMemory); Assert.Equal(1000, policy.MinimumSampleMs);
         for (int t = 14; t <= 24; t += 2) policy.Observe(Sample(t));
         Assert.True(policy.CanStartHeavyWork); Assert.Equal(50, policy.MinimumSampleMs);
     }
@@ -103,7 +104,7 @@ public sealed class WorkloadPolicyTests
         foreach (int t in new[] { 0, 2, 4, 6 }) policy.Observe(Sample(t, available: 100L << 20));
         Assert.False(policy.CanStartHeavyWork); Assert.True(policy.CanReadMemory); Assert.Equal(50, policy.MinimumSampleMs);
         foreach (int t in new[] { 8, 10, 12 }) policy.Observe(Sample(t, 90, available: 100L << 20));
-        Assert.False(policy.CanReadMemory); Assert.Equal(1000, policy.MinimumSampleMs);
+        Assert.True(policy.CanReadMemory); Assert.Equal(1000, policy.MinimumSampleMs);   // a busy PC slows reading, never stops it
     }
 
     [Fact]
@@ -111,9 +112,9 @@ public sealed class WorkloadPolicyTests
     {
         var policy = new WorkloadPolicy();
         foreach (int t in new[] { 0, 2, 4 }) policy.Observe(Sample(t, 90));
-        policy.Observe(Sample(6)); policy.Observe(Sample(30)); Assert.False(policy.CanReadMemory);
-        policy.Observe(Sample(29)); Assert.False(policy.CanReadMemory);
+        policy.Observe(Sample(6)); policy.Observe(Sample(30)); Assert.False(policy.CanStartHeavyWork);
+        policy.Observe(Sample(29)); Assert.False(policy.CanStartHeavyWork);
         foreach (int t in new[] { 32, 34, 36, 38 }) policy.Observe(Sample(t));
-        Assert.True(policy.CanReadMemory);
+        Assert.True(policy.CanStartHeavyWork);
     }
 }

@@ -1,4 +1,4 @@
-FFACiv Recorder 0.7.27 - UI32 - beta
+FFACiv Recorder 0.7.28 - UI33 - beta
 
 For Windows 10/11, 64-bit. Microsoft Edge WebView2 Runtime is required.
 The installer includes .NET; administrator access is not required.
@@ -10,9 +10,9 @@ GETTING STARTED
    playing or smaller prepared uploads.) Saved choices are preserved when upgrading.
 2. Let the recorder set Civilization V to autosave every turn (Fix it for me), or set
    Turns between autosaves = 1 yourself.
-3. Play normally. Resource controls can pause background work.
+3. Play normally. A busy PC slows the recorder down; it still copies every autosave.
 4. Leave the recorder running after playing for pending uploads. With automatic
-   uploads on, a finished game is sent once Civ is in its main menu or closed. The
+   uploads on, a finished game is sent once Civ is closed. The
    replay stays hidden on ffaciv.com for 2 hours, then goes public by itself; a
    warning comes 5 minutes before, with Hide 2 more hours and Delete. To send and process saves
    during play, select Options > Upload and process saves > While playing.

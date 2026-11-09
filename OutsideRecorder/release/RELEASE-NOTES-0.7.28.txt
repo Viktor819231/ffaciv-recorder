@@ -1,0 +1,23 @@
+FFACiv Recorder 0.7.28 / UI33
+
+- Fixed: a busy PC could stop the recorder from recording a game. When Civ (or anything else) kept the processor very
+  busy, the recorder stopped looking at Civ and stopped copying its autosaves, so a whole multiplayer game could be
+  missed while the window said "waiting for a game". Now a busy PC only slows the recorder down: autosaves are always
+  copied (only the few seconds right after each new turn wait), and the window says "Your PC is busy - the recorder
+  holds back" while it does.
+- Changed: with uploads "After the game", a finished game now uploads once Civ is closed (no longer as soon as Civ is
+  back at its main menu), and the replay goes public 2 hours after that upload.
+- Fixed: one game the site refused (for example an expired one) stopped every later game from uploading. That game now
+  waits 30 minutes and the other games go on.
+- Fixed: a PC sleep in the middle of an upload could stop uploads until the recorder was restarted.
+- Fixed: a full disk or a locked file could close the recorder.
+- Delete now hides the replay on ffaciv.com at once, also while you are in a game.
+- Old games: the first Manual upload asks once whether to send smaller uploads or whole saves. The recorder remembers
+  which old saves it has already checked, so starting it no longer reads every autosave on the PC again.
+- Lighter: while the window is hidden the recorder no longer rebuilds the whole window every 3 seconds, and finished
+  games are checked on the site every 10 minutes instead of every 15 seconds.
+- Smaller fixes: dates in English everywhere; open sections and lists stay open; Minimize to tray no longer ends in
+  "Still waiting for confirmation"; a save folder that is offline for a moment (OneDrive) no longer makes old saves
+  count as new; files are written safely in case of a power cut; KEK saves are left out at once.
+
+Unsigned beta, the same as 0.7.27. Installing over the current recorder keeps settings and recordings.

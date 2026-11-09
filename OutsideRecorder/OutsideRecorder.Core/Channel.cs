@@ -58,8 +58,10 @@ public sealed class Channel : IDisposable
         if (l is not { IsStagingRoom: true })
         {
             if (last is not null && l is { GameStarted: false }) { rec.Write("lobby_closed", null, new Dictionary<string, object?> { ["channel"] = Id }); rec.Flush(); }
-            if (l is null || !l.GameStarted) last = null;   // a started game keeps the lobby until game_started is written
-            if (l is { GameStarted: false }) lastJson = null;
+            // a started game keeps the lobby until game_started is written. The last line's text goes with the lobby: an
+            // unreadable look (null) that kept it made the same lobby seen again count as nothing new, so Lobby stayed
+            // empty, its closing was never written and its next change was written as a new "lobby"
+            if (l is null || !l.GameStarted) { last = null; lastJson = null; }
             return false;
         }
         var data = Data(l, mod);
@@ -86,18 +88,16 @@ public sealed class Channel : IDisposable
         last = null; lastJson = null;
     }
 
-    static readonly string[] SlotNames = ["open", "computer", "closed", "human", "observer"];
-
     /// <summary>The lobby line's fields (OR03 "Lobby / channel").</summary>
     public Dictionary<string, object?> Data(LobbySnapshot l, string? mod) => new()
     {
         ["channel"] = Id, ["mod"] = mod, ["gameName"] = l.GameName, ["mapScript"] = l.MapScript, ["worldSize"] = l.WorldSize,
         ["gameSpeed"] = l.GameSpeed, ["era"] = l.Era, ["activePlayer"] = l.ActivePlayer, ["host"] = null,
-        ["turnTimer"] = l.TurnTimer is { } t ? new Dictionary<string, object?> { ["enabled"] = t.Enabled, ["type"] = t.Type, ["seconds"] = t.Seconds } : null,
+        ["turnTimer"] = l.TurnTimer?.Data(),
         ["turnTimerSeconds"] = l.TurnTimer?.TurnSeconds,
         ["slots"] = l.Slots.Select(s => new Dictionary<string, object?>
         {
-            ["player"] = s.Id, ["status"] = s.Status, ["statusName"] = s.Status is >= 0 and < 5 ? SlotNames[s.Status] : null,
+            ["player"] = s.Id, ["status"] = s.Status, ["statusName"] = Differ.SlotName(s.Status),
             ["nickname"] = s.Nickname, ["name"] = s.Name, ["steamId"] = s.SteamId, ["inUse"] = s.InUse, ["civ"] = s.Civ, ["civKey"] = s.CivKey, ["random"] = s.Civ == -1, ["leader"] = s.Leader,
             ["team"] = s.Team, ["handicap"] = s.Handicap, ["you"] = s.Id == l.ActivePlayer,
         }).ToList(),

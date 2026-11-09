@@ -12,6 +12,9 @@ public interface IRecorderBackend : IDisposable
 {
     /// <summary>The whole state the window shows (shape: OR02 "State"; ui/js/mock.js base() is a full example).</summary>
     JsonObject BuildState();
+    /// <summary>The recorder's timed work plus only what the tray icon needs ({ status, checks }): used while the window is
+    /// hidden or minimised, so nobody pays for drawing a window nobody sees.</summary>
+    JsonObject BuildTrayState();
     /// <summary>Runs a command from the window or a pop-up; may answer with { dialog?, toast? } for the window.</summary>
     JsonObject? Handle(string cmd, JsonObject args);
     /// <summary>A pop-up to show (any thread): { kind, title, text, actions? }.</summary>

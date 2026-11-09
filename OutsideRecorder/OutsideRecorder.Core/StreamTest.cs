@@ -57,7 +57,7 @@ public static class StreamTest
             var mem = new ReplayMemory(); StateReader? reader = null; TapeHeader? header = null; GameCoreLayout? layout = null;
             foreach (var (h, s) in TapeReader.Read(Path.Combine(session, "tape.bin.gz")))
             {
-                if (h is not null) { mem.Clear(); header = h; layout = KnownLayouts.All.Single(l => l.Id == h.Layout); reader = new StateReader(mem, h.ModuleBase, layout) { BlockReads = h.Reads >= 2 }; continue; }
+                if (h is not null) { mem.Clear(); header = h; reader = TapeReplay.ReaderFor(h, mem); layout = KnownLayouts.All.Single(l => l.Id == h.Layout && l.DllSha256 == h.CoreSha256); continue; }
                 mem.Apply(s!);
                 if (s!.TimeUs <= skipUntil) continue;
                 if (first < 0) first = s!.TimeUs;
@@ -75,15 +75,10 @@ public static class StreamTest
                     rec = new JsonlRecording(folder, "events.jsonl", () => now);
                     pipe = new GamePipeline(rec, reader.UnitTypeKey, true, known is null ? -1 : JsonlRecording.LastTurn(Path.Combine(folder, "events.jsonl")) ?? -1);
                     // the same first line the real recorder writes (RecorderSession.BeginGame): the converter needs the identity
-                    rec.Write("recording_profile", snap.Turn, new Dictionary<string, object?>
-                    {
-                        ["recorder"] = "FFACiv Outside Recorder", ["method"] = "read-only memory sampling (stream test replay)", ["sampleMs"] = header!.SampleMs,
-                        ["layout"] = layout!.Id, ["mod"] = layout.Name, ["coreSha256"] = header.CoreSha256,
-                        ["autosaveTiming"] = layout.AutosaveAtTurnStart ? "start_of_turn" : "end_of_turn",
-                        ["gameType"] = snap.GameType, ["activePlayer"] = snap.ActivePlayer, ["mapWidth"] = snap.MapWidth, ["mapHeight"] = snap.MapHeight,
-                        ["identity"] = id, ["context"] = entry.Context, ["mapSeed"] = snap.MapSeed, ["syncSeed"] = snap.SyncSeed, ["tape"] = false,
-                        ["processId"] = 0, ["recorderStarted"] = DateTimeOffset.Now.ToString("o"), ["streamTest"] = true,
-                    });
+                    var profile = RecorderSession.ProfileData(snap, layout!, header!.CoreSha256, "read-only memory sampling (stream test replay)",
+                        header.SampleMs, id, entry.Context, tape: false, processId: 0, recorderStarted: DateTimeOffset.Now.ToString("o"));
+                    profile["streamTest"] = true;
+                    rec.Write("recording_profile", snap.Turn, profile);
                     rec.Write("lifecycle", snap.Turn, new Dictionary<string, object?> { ["state"] = known is null ? "recording" : "game_rejoined", ["reason"] = "stream test" });
                 }
                 pipe?.Step(st, snap, now / 1000);
@@ -185,7 +180,7 @@ public static class SiteCheck
     {
         var output = args[Array.IndexOf(args, "--site-check") + 1];
         var settings = new RecorderSettings { OutputFolder = output, Stream = Arg(args, "--stream", "site"), StreamUrl = Arg(args, "--url", "") };
-        var game = Arg(args, "--game", new GameIndex(output).Load().FirstOrDefault(g => !g.Identity.StartsWith("channel:"))?.Identity ?? "1a2b3c4d-5e6f7a8b");
+        var game = Arg(args, "--game", new GameIndex(output).Load().FirstOrDefault(g => !g.Identity.StartsWith("channel:", StringComparison.Ordinal))?.Identity ?? "1a2b3c4d-5e6f7a8b");
         using var s = new Streamer(settings, version: Arg(args, "--version", "0.5.0"));
         int bad = 0;
         void Check(string what, bool ok, string detail) { Console.WriteLine($"{(ok ? "PASS" : "FAIL")} {what}: {detail}"); if (!ok) bad++; }

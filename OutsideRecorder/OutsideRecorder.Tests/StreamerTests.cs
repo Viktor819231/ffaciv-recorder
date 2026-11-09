@@ -15,11 +15,14 @@ sealed class FakeSite : HttpMessageHandler
     public bool RefuseDeltas;
     public int Requests;
     public Action? SaveReceived;
+    /// <summary>An answer of the test's own for some requests (null: the usual one).</summary>
+    public Func<HttpRequestMessage, HttpResponseMessage?>? Answer;
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         Requests++;
         if (Down) throw new HttpRequestException("server down");
+        if (Answer?.Invoke(request) is { } own) return own;
         var path = request.RequestUri!.AbsolutePath;
         HttpResponseMessage Json(HttpStatusCode code, object body) => new(code) { Content = new StringContent(JsonSerializer.Serialize(body)) };
         if (path.EndsWith("/register")) return Json(HttpStatusCode.OK, new { id = "u_0123456789abcdef", key = "u_0123456789abcdef.k" });

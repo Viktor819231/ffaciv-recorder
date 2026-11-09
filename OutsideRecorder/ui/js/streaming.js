@@ -1,0 +1,45 @@
+// The Streaming screen and the private livestream controls (also on the current game card and in the lobby).
+// Reads the shared window state `ui` (js/app.js); the files load in the order of index.html.
+'use strict';
+function liveLinkRow() {
+  const l = ui.S.livestream;
+  if (!l?.active) return '';
+  let address = '';
+  if (l.url) {try {const u = new URL(l.url); address = u.host + u.pathname;} catch {address = l.url;}}
+  const expires = l.expiresAt ? new Date(l.expiresAt).getTime() : null;
+  const label = l.problem ? 'Needs attention' : l.starting || !l.url ? 'Preparing' : l.status==='waiting' ? 'Waiting' : 'Ready';
+  return `<div class="stream-active"><div class="stream-lobby-heading">${icon('requests')}<div><div class="eyebrow">PRIVATE LIVESTREAM</div><h3>${l.scope==='player'?'Your player link':'This game’s stream'}</h3></div><span class="badge ${l.url ? 'public' : 'countdown'}">${label}</span></div><p class="stream-privacy">${icon('lock')}Anyone with the invite can watch · Not publicly listed</p><p class="small">${l.scope==='player'?'One link follows your recordings through rehosts and new games. Viewers choose when to switch.':'This link stays with this game.'}${expires && Number.isFinite(expires)?` Expires ${untilSpan(expires)}.`:''}</p>${l.url ? `<button class="stream-lobby-address" data-cmd="openSite" data-args="${attr({url:l.url})}" data-k="stream-lobby-address"><span>${esc(address)}</span>${icon('external')}</button><div class="row actions">${btn(`${icon('external')} Open livestream`, 'openSite', {url:l.url}, 'primary')}${btn(`${icon('link')} Copy invite link`, 'copyLiveLink', {})}</div>` : '<p class="small">Confirming private access. Your invite appears when ready.</p>'}${l.problem ? `<p class="stream-problem" role="status">${esc(l.problem)}</p>` : ''}</div>`;
+}
+function currentSaveStreamAction() {
+  const l=ui.S.livestream??{};
+  return l.active && l.waitingForGame && ui.S.current?.context && !ui.S.current?.lobby && !ui.S.current?.ended
+    ? '<button class="btn primary" data-dialog="livestream" data-k="start-current-save">Stream current save</button>' : '';
+}
+function gameStreamActions(g) {
+  if (!g.context || g.context !== ui.S.current?.context || ui.S.current?.ended || ui.S.current?.lobby) return '';
+  const l = ui.S.livestream ?? {};
+  if (l.active) return currentSaveStreamAction() + (l.url
+    ? `${btn(`${icon('external')} Open livestream`, 'openSite', {url:l.url})}${btn(`${icon('link')} Copy stream link`, 'copyLiveLink', {}, 'primary')}`
+    : '<button class="btn quiet" disabled>Preparing stream link…</button>');
+  return l.canStart === true ? '<button class="btn" data-dialog="livestream" data-k="game-stream-link">Get livestream link</button>' : '';
+}
+function liveSessionControl() {
+  const l = ui.S.livestream ?? {};
+  return `<div class="recording-stream-options"><h3>Private livestream <span class="badge plain">Experimental</span></h3><p class="small">You choose when to enable sharing with a private invite. Anyone with the link can watch; it is not publicly listed.</p>${l.active ? liveLinkRow()+currentSaveStreamAction()+`<div class="row actions">${btn('Disable livestream','stopLivestream',{},'danger')}</div>` : `<div class="row actions"><button class="btn primary" data-dialog="livestream" data-k="get-livestream-link" >${icon('link')} Enable livestream</button></div>${l.canStart===true?'':`<p class="small" role="status">${esc(l.setupReason??(l.needsSetup?'Enable to review the required recording settings and prepare your invite.':'Prepare your invite now. Viewers can wait for your next game.'))}</p>`}`}<details class="stream-explainer"><summary>How it works &amp; safety</summary><p class="small">Starting a private stream sends this game while you play, even if normal uploads wait until after the game. Viewers download from the website; more viewers do not add uploads from your PC.</p><p class="small">Experimental player-action logs use read-only access outside Civ. They do not inject code or change game memory. Resource protection can pause work, so the stream may be delayed.</p><p class="small">Invite links expire and can be forwarded. Disable livestream ends the invite. Streaming stays off after Recorder restarts until you start it again.</p></details></div>`;
+}
+function streamingShortcut() {
+  const l=ui.S.livestream??{};
+  return `<div class="recording-stream-options"><h3>Private livestream <span class="badge plain">${l.active?'Enabled':'Off'}</span></h3><p class="small">${l.active?'Manage your follow link and current stream.':'Prepare a private follow link before your next game, or start from the current save.'}</p>${go('Open Streaming','streaming','quiet')}</div>`;
+}
+function streamTechnicalCard() {
+  const l=ui.S.livestream??{}, t=l.technical??{}, r=ui.S.resources??{};
+  const value=v=>v==null?'–':esc(v), bytes=v=>v==null?'–':kb(v);
+  const flag=v=>v==null?'–':v?'Allowed':'Waiting';
+  const metric=(label,v)=>`<div><dt>${label}</dt><dd>${v}</dd></div>`;
+  return `<section class="card stream-technical"><h3>Transport status</h3><p class="small path">${value(t.server)}</p><dl class="stream-metrics">${metric('Sender',value(t.transportState))}${metric('Live slot',value(t.slot))}${metric('Local control gate',flag(t.controlAllowed))}${metric('Game payload',flag(t.payloadAllowed))}${metric('Save upload mode',value(t.saveUpload))}${metric('Latest recorded turn',value(ui.S.current?.turn))}${metric('Saves queued',value(t.queuedSaves))}${metric('Event bytes queued',bytes(t.queuedEventBytes))}${metric('Last acknowledgement',t.lastSentAt?esc(new Date(t.lastSentAt).toLocaleTimeString('en-GB')):'–')}</dl>${t.lastError?`<p class="stream-problem" role="status">${esc(t.lastError)}</p>`:''}${t.waitReason?`<p class="small" role="status">Work paused: ${esc(t.waitReason)}</p>`:''}<h3>Transfer counters</h3><p class="small">This sender session. Counters reset when the sender restarts.</p><dl class="stream-metrics">${metric('Full saves sent',value(t.fullSaves))}${metric('Delta saves sent',value(t.deltaSaves))}${metric('Acknowledged save data',bytes(t.saveBytes))}${metric('Acknowledged gzip events',bytes(t.eventBytes))}${metric('HTTP requests',value(t.requests))}${metric('Event chunks accepted',value(t.chunks))}${metric('Delta preparation',t.deltaCpuMs==null?'–':`${Math.round(t.deltaCpuMs)} ms`)}${metric('Log preparation',t.chunkCpuMs==null?'–':`${Math.round(t.chunkCpuMs)} ms`)}</dl><p class="small">Preparation figures are accumulated packing/diff elapsed time, not a CPU-utilization percentage. Transfer counters exclude HTTP/TLS overhead.</p><h3>Work limits</h3><dl class="stream-metrics">${metric('Upload pacing',t.uploadKibPerSecond==null?'–':t.uploadKibPerSecond===0?'Unpaced':`${t.uploadKibPerSecond} KiB/s`)}${metric('Upload mode',t.idleUploadMode?'Menu / closed · faster':'Gameplay · conservative')}${metric('Saves per private pass',value(t.saveBatchLimit))}${metric('Event chunks per pass',value(t.eventChunkLimit))}${metric('Max decoded chunk',bytes(t.eventChunkBytes))}${metric('Recorder CPU budget',typeof r.cpuBudgetPercent==='number'?`${r.cpuBudgetPercent}%`:'–')}${metric('Recorder CPU sample',typeof r.cpuPercent==='number'?`${r.cpuPercent.toFixed(1)}%`:'–')}${metric('Recorder host memory',bytes(r.memoryBytes))}${metric('Resource gate',value(r.reason))}</dl>${go('Resource details','checks','quiet')}</section>`;
+}
+function streaming() {
+  const current=ui.S.current;
+  const ongoing=current && !current.ended ? currentGame(current) : `<section class="card prose"><h3>No active recording</h3><p>The follow invite can be prepared with Civ closed. Game transfer waits for an authorized recording.</p></section>`;
+  return `<h2 class="screen-title">Streaming</h2>${problems().length?setupChecksCard():''}<div class="cols"><div class="col"><section class="card streaming-controls">${liveSessionControl()}</section><div><h3 class="group-label">${current?.lobby?'Current lobby':'Ongoing game'}</h3>${ongoing}</div><section class="card prose"><h3>Stream protocol</h3><p><b>Starting point:</b> the latest settled autosave is sent whole if needed. Older unsent saves stay local; existing server data and upload receipts are preserved. New saves use the selected full/delta mode.</p><p><b>Events:</b> JSONL observations are sent in gzip chunks with byte offsets and acknowledgements. Existing event progress is retained; retries reuse the same pending chunk.</p><p><b>Gates:</b> private-access acknowledgement and a matching live slot precede game payloads. Preparation passes are serialized, with resource and turn-quiet gates checked during work.</p><details><summary>Privacy and viewer behavior</summary><p>The invite follows your recordings until expiry. Anyone with it can watch or forward it; the stream is unlisted. Disable ends sharing without changing ordinary upload preferences. Recorder restarts require sharing to be enabled again.</p><p>The viewer draws recorded game data locally. It can lag behind capture. More viewers do not add uploads from your PC.</p></details></section></div><div class="col">${streamTechnicalCard()}</div></div>`;
+}

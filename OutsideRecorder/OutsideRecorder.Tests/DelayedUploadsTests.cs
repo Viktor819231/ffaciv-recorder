@@ -41,6 +41,22 @@ public sealed class DelayedUploadsTests : IDisposable
     }
 
     [Fact]
+    public void AGameThatWaitedForCivToCloseStillGetsTwoHiddenHoursAfterItsUpload()
+    {
+        // the user, 2026-11-09: "upload when civ is not running but going public after 2 hours"
+        var queue = Queue();
+        queue.Schedule(context);
+        now = now.AddHours(3);                            // the next game kept Civ open: nothing was uploaded yet
+        queue.MarkHold(context, "hidden");                // Civ closed, the upload begins hidden
+        Assert.Equal(now.AddHours(2), queue.Get(context).DueAt);
+        Assert.Empty(queue.TakeWarnings());
+        var later = GameIndex.NewContext();               // a longer wait chosen by hand is kept
+        queue.Schedule(later); queue.Postpone(later, TimeSpan.FromHours(24));
+        queue.MarkHold(later, "hidden");
+        Assert.Equal(now.AddHours(24), queue.Get(later).DueAt);
+    }
+
+    [Fact]
     public void FinishedGameUploadsOnceHiddenAndGoesPublicAfterTwoHoursAndAWarning()
     {
         // the user, 2026-11-02: "wait 2 hours to become visible" instead of waiting 2 hours to upload

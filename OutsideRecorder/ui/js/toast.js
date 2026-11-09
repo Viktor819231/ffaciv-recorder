@@ -5,7 +5,7 @@
 (() => {
   const web = window.chrome?.webview;
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-  const KIND = { good: 'checkCircle', warn: 'alert', bad: 'xCircle', request: 'requests', info: 'record' };
+  const KIND = { good: 'checkCircle', warn: 'alert', bad: 'xCircle', info: 'record' };
   const el = document.getElementById('toast');
   let timer = null, left = 0, last = 0;
   const post = (cmd, args = {}) => web?.postMessage({ cmd, args });

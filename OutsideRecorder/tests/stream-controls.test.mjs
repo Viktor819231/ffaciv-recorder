@@ -2,15 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const source = readFileSync(new URL('../ui/js/app.js', import.meta.url), 'utf8');
+// The window's scripts in the order index.html loads them. Icons, the made-up recorder and the bridge stay out: each test
+// sets the state itself, and the window's drawing functions are plain globals of the scripts.
+const read = (path) => readFileSync(new URL('../ui/' + path, import.meta.url), 'utf8');
+const scripts = [...read('index.html').matchAll(/<script src="(js\/[^"]+)"><\/script>/g)].map(([, f]) => f)
+  .filter((f) => !['js/icons.js', 'js/mock.js', 'js/bridge.js'].includes(f));
 function ui(state) {
   const context = vm.createContext({ location:{hash:'',search:''}, URLSearchParams,
     document:{addEventListener(){}}, window:{addEventListener(){}},
     Bridge:{on(){},start(){}}, icon:()=>'', setInterval(){}, setTimeout(){}, clearTimeout(){}, Date });
-  const instrumented=source.replace('return { start: () => Bridge.start(),', 'return { testState: s => { S=s; }, replayControls, streamingScreen: streaming, homeScreen: home, streamControls: liveSessionControl, gameStreamActions, crashDiagnosticsCard, streamDialog: (options={}) => { dialog={kind:"livestream",...options}; return dialogHtml(); }, start: () => Bridge.start(),');
-  vm.runInContext(instrumented+'\nglobalThis.result=App;',context);
-  context.result.testState(state);
-  return context.result;
+  for (const f of scripts) vm.runInContext(read(f), context, { filename: f });
+  const shared = vm.runInContext('ui', context), fn = (name) => vm.runInContext(name, context);
+  shared.S = state;
+  return { replayControls: fn('replayControls'), streamingScreen: fn('streaming'), homeScreen: fn('home'), streamControls: fn('liveSessionControl'),
+    gameStreamActions: fn('gameStreamActions'), crashDiagnosticsCard: fn('crashDiagnosticsCard'),
+    streamDialog: (options={}) => { shared.dialog = {kind:'livestream', ...options}; return fn('dialogHtml')(); } };
 }
 test('private livestream section remains visible with no game and explains blocked start',()=>{
   const app=ui({livestream:{active:false,canStart:false,reason:'Join a game first.'}});

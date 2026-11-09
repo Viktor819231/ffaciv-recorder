@@ -252,6 +252,24 @@ public sealed class GamePipeline
 /// <summary>"--replay-tape": runs reader + differ again over a recorded tape and writes events.replay.jsonl.</summary>
 public static class TapeReplay
 {
+    /// <summary>
+    /// The reader for one tape part: the DLL the header names (layout id and SHA-256 must both be known), reading exactly the
+    /// way the live run read (<see cref="TapeHeader.Reads"/>), so it asks only for what the tape holds.
+    /// </summary>
+    public static StateReader ReaderFor(TapeHeader header, IMemory memory)
+    {
+        var layout = KnownLayouts.All.FirstOrDefault(l => l.Id == header.Layout && l.DllSha256 == header.CoreSha256)
+            ?? throw new InvalidDataException($"tape was made with {header.Layout}, which this version does not know");
+        return new StateReader(memory, header.ModuleBase, layout)
+        {
+            BlockReads = header.Reads >= 2, ReadCityMicro = header.Reads >= 3,
+            RetryUnreadNames = header.Reads >= 4, TimerStartOnNewTurn = header.Reads >= 4,
+        };
+    }
+
+    /// <summary>The <see cref="TapeHeader.Reads"/> this version's live reader writes on its tapes.</summary>
+    public const int CurrentReads = 4;
+
     /// <summary>Replays <paramref name="sessionFolder"/>/tape.bin.gz; returns (samples, lines written, output path).</summary>
     public static (int Samples, long Lines, string Output) Run(string sessionFolder, bool snapshotEachTurn = true)
     {
@@ -268,10 +286,8 @@ public static class TapeReplay
         {
             if (h is not null)
             {
-                var layout = KnownLayouts.All.FirstOrDefault(l => l.Id == h.Layout && l.DllSha256 == h.CoreSha256)
-                    ?? throw new InvalidDataException($"tape was made with {h.Layout}, which this version does not know");
                 mem.Clear();
-                reader = new StateReader(mem, h.ModuleBase, layout) { BlockReads = h.Reads >= 2, ReadCityMicro = h.Reads >= 3 };   // the same reads the live run made
+                reader = ReaderFor(h, mem);   // the same reads the live run made
                 pipe ??= new GamePipeline(rec, reader.UnitTypeKey, snapshotEachTurn);
                 continue;
             }

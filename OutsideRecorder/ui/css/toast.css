@@ -8,7 +8,7 @@ body.toast-body { background: transparent; overflow: hidden; }
   box-shadow: inset 0 0 0 1px #c8a45a33;
 }
 .toast::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
-.toast.good { --accent: var(--green); } .toast.warn { --accent: var(--orange); } .toast.bad { --accent: var(--red); } .toast.request { --accent: var(--gold-bright); }
+.toast.good { --accent: var(--green); } .toast.warn { --accent: var(--orange); } .toast.bad { --accent: var(--red); }
 .toast .t-ic { width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center;
   background: radial-gradient(circle, #0a1416 0 58%, transparent 60%), conic-gradient(var(--gold-bright), var(--gold-dim), var(--gold-bright)); }
 .toast .t-ic svg { width: 17px; height: 17px; color: var(--accent); }

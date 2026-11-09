@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace OutsideRecorderCore;
@@ -204,16 +205,25 @@ public sealed class RecorderSession : IDisposable
     public void DeleteGameIdentity(string id)
     {
         deletedIdentities[id] = true;
-        Directory.CreateDirectory(settings.OutputFolder);
-        SafeFiles.Replace(DeletedFile, System.Text.Json.JsonSerializer.Serialize(deletedIdentities.Keys.ToArray()));
+        PersistDeletedIdentities();
         if (Status.Identity == id) PauseGame();
     }
     /// <summary>Undo of a held deletion: the game is recorded and uploaded again like any other.</summary>
     public void RestoreGameIdentity(string id)
     {
         if (!deletedIdentities.TryRemove(id, out _)) return;
-        Directory.CreateDirectory(settings.OutputFolder);
-        SafeFiles.Replace(DeletedFile, System.Text.Json.JsonSerializer.Serialize(deletedIdentities.Keys.ToArray()));
+        PersistDeletedIdentities();
+    }
+    readonly object deletedFileLock = new();
+    /// <summary>Writes deleted-games.json. Deleting and restoring come from different threads: the list is taken inside the
+    /// lock, so an older list can never replace a newer one.</summary>
+    void PersistDeletedIdentities()
+    {
+        lock (deletedFileLock)
+        {
+            Directory.CreateDirectory(settings.OutputFolder);
+            SafeFiles.Replace(DeletedFile, System.Text.Json.JsonSerializer.Serialize(deletedIdentities.Keys.ToArray()));
+        }
     }
     /// <summary>Whether the player deliberately deleted this game's recording.</summary>
     public bool IsDeletedIdentity(string? id) => id is not null && deletedIdentities.ContainsKey(id);
@@ -352,14 +362,15 @@ public sealed class RecorderSession : IDisposable
                     stop.Token.WaitHandle.WaitOne(100);
                     continue;
                 }
-                saveOnly.Close();
+                // a memory recording took over: the files-only capture of saves that came before it is complete
+                if (rec is not null) saveOnly.Close();
                 if (Workload is { CanReadMemory: false } held)
                 {
                     // asking Windows whether Civ still runs reads none of its memory: a busy PC must not keep a closed Civ on screen
                     if (mem is { IsAlive: false } gone) { Detach("Civ closed", gone.ExitCode); continue; }
-                    memoryWasHeld = true; memoryHeldWhy = held.Reason;
-                    Diagnostics?.Activity("Memory capture deferred", held.Reason);
-                    Status = Status with { State = held.Reason, LooksPerSecond = 0 };
+                    NoteMemoryHeld(held);
+                    // saves are still noticed while reading waits: copies wait for the budget, the files stay queued
+                    if (clock.ElapsedMilliseconds >= nextAutosavePoll) { PollAutosaves(); nextAutosavePoll = clock.ElapsedMilliseconds + 1000; }
                     stop.Token.WaitHandle.WaitOne(250);
                     continue;
                 }
@@ -372,11 +383,17 @@ public sealed class RecorderSession : IDisposable
                     if (FindCiv && clock.ElapsedMilliseconds >= nextSearch) { Search(); nextSearch = clock.ElapsedMilliseconds + 2000; }
                 }
                 else Sample();
-                // Observe the current turn before file work. Quiet-period saves remain queued.
-                if (ExperimentalMemoryCapture && !TurnTransitionQuiet && clock.ElapsedMilliseconds >= nextAutosavePoll)
+                // Observe the current turn before file work. Quiet-period saves remain queued (only noticed, PollAutosavesCore).
+                if (ExperimentalMemoryCapture && clock.ElapsedMilliseconds >= nextAutosavePoll)
                 { PollAutosaves(); nextAutosavePoll = clock.ElapsedMilliseconds + 1000; }
             }
-            catch (Exception e) { Diagnostics?.Error("Capture loop", e); Detach("error"); Status = Status with { LastError = $"{DateTime.Now:HH:mm:ss} {e.GetType().Name}: {e.Message}" }; }
+            catch (Exception e)
+            {
+                Diagnostics?.Error("Capture loop", e);
+                // a full disk or a locked file can make the clean-up fail too: that must not end this thread (and the program)
+                try { Detach("error"); } catch (Exception again) { Diagnostics?.Error("Capture loop clean-up", again); }
+                Status = Status with { LastError = $"{DateTime.Now:HH:mm:ss} {e.GetType().Name}: {e.Message}" };
+            }
             var took = (clock.Elapsed - t0).TotalMilliseconds;
             // the pace: as asked, unless a look takes so long that it would use more than MaxBusy of one core
             lookAvg = NextLookAverage(lookAvg, took);
@@ -389,9 +406,10 @@ public sealed class RecorderSession : IDisposable
             };
             stop.Token.WaitHandle.WaitOne(Math.Max(5, interval - (int)took));
         }
-        PersistPendingCopies(force: true);
-        saveOnly.Close();
-        Detach("recorder closed");
+        try { PersistPendingCopies(force: true); } catch (Exception e) { Diagnostics?.Error("Pending copies at close", e); }
+        try { saveOnly.Close(); } catch (Exception e) { Diagnostics?.Error("Save copies at close", e); }
+        try { Detach("recorder closed"); } catch (Exception e) { Diagnostics?.Error("Recording at close", e); }
+        CloseOwnedFiles();
     }
 
     void Search()
@@ -399,7 +417,13 @@ public sealed class RecorderSession : IDisposable
         // Check before Inspect: even build detection must not open/read the game while held.
         if (!FindCiv || !TrackLogs || recordingOff || Workload is { CanReadMemory: false }) return;
         var procs = GameFinder.CivProcesses().ToList();
-        if (procs.Count == 0) { CloseUnsupported(); Status = Status.CivGone(); return; }
+        try { SearchAmong(procs); }
+        finally { foreach (var process in procs) process.Dispose(); }   // every 2 s while Civ runs and no game is attached
+    }
+
+    void SearchAmong(List<Process> procs)
+    {
+        if (procs.Count == 0) { CloseUnsupported(); saveOnly.Close(); Status = Status.CivGone(); return; }
         Status = Status with { CivDetected = true };
         var p = procs[0];
         var f = GameFinder.Inspect(p);
@@ -413,20 +437,10 @@ public sealed class RecorderSession : IDisposable
         }
         if (f.Layout is null)
         {
-            if (f.GameCore is not null && RecordingEnabled && BackupUnsupportedEnabled)
-            {
-                var hash = f.GameCoreSha256;
-                if (unsupported is null || unsupported.CoreHash != hash || unsupportedProcess != p.Id)
-                {
-                    CloseUnsupported(); unsupportedProcess = p.Id;
-                    unsupported = new UnsupportedBackup(settings.OutputFolder, p.Id, hash, f.Status);
-                }
-            }
+            if (f.GameCore is not null && RecordingEnabled && BackupUnsupportedEnabled) StartUnsupported(p.Id, f.GameCoreSha256, f.Status);
             else CloseUnsupported();
-            Status = Status with { State = f.Status, Game = f.ExeName, Recording = false,
-                UnsupportedBackingUp = unsupported is not null && !unsupported.KekExcluded,
-                UnsupportedKek = unsupported?.KekExcluded == true, UnsupportedFolder = unsupported?.Folder,
-                UnsupportedSaves = unsupported?.Saves ?? 0 };
+            Status = Status with { State = f.Status, Game = f.ExeName, Recording = false };
+            ShowUnsupported();
             if (f.GameCore is not null && lastRefusedPid != p.Id)
             {
                 lastRefusedPid = p.Id;
@@ -436,12 +450,7 @@ public sealed class RecorderSession : IDisposable
         }
         if (refusedHash == f.GameCoreSha256 && lastRefusedPid == p.Id)
         {
-            if (RecordingEnabled && BackupUnsupportedEnabled)
-            {
-                unsupported ??= new UnsupportedBackup(settings.OutputFolder, p.Id, refusedHash!, refusedReason ?? "Layout verification failed");
-                Status = Status with { UnsupportedBackingUp = !unsupported.KekExcluded, UnsupportedKek = unsupported.KekExcluded,
-                    UnsupportedFolder = unsupported.Folder, UnsupportedSaves = unsupported.Saves };
-            }
+            if (RecordingEnabled && BackupUnsupportedEnabled) StartUnsupported(p.Id, refusedHash, refusedReason ?? "Layout verification failed");
             else CloseUnsupported();
             return;
         }
@@ -454,12 +463,7 @@ public sealed class RecorderSession : IDisposable
             Status = Status with { State = $"Refusing to read: {why}" };
             Notice?.Invoke("Not recording", $"The game core looks different from what we know ({why}).");
             mem.Dispose(); mem = null; reader = null; taping = null; lastRefusedPid = p.Id; refusedHash = f.GameCoreSha256; refusedReason = why;
-            if (RecordingEnabled && BackupUnsupportedEnabled)
-            {
-                unsupportedProcess = p.Id;
-                unsupported = new UnsupportedBackup(settings.OutputFolder, p.Id, f.GameCoreSha256!, why ?? "Layout verification failed");
-                Status = Status with { UnsupportedBackingUp = true, UnsupportedFolder = unsupported.Folder, UnsupportedSaves = 0 };
-            }
+            if (RecordingEnabled && BackupUnsupportedEnabled) StartUnsupported(p.Id, f.GameCoreSha256, why ?? "Layout verification failed");
             return;
         }
         found = f;
@@ -479,155 +483,175 @@ public sealed class RecorderSession : IDisposable
         return elapsed < QuietMs ? 1000 : elapsed < QuietMs + 2000 ? 500 : elapsed < QuietMs + 4000 ? 200 : 0;
     }
 
+    /// <summary>One look at Civ: the quiet-window header look, the turn-transition gate, or a taped read of the game.</summary>
     void Sample()
     {
         if (!TrackLogs || recordingOff) return;
-        if (Workload is { CanReadMemory: false } held)
-        {
-            memoryWasHeld = true; memoryHeldWhy = held.Reason;
-            Diagnostics?.Activity("Memory capture deferred", held.Reason);
-            Status = Status with { State = held.Reason, LooksPerSecond = 0 };
-            return;
-        }
+        if (Workload is { CanReadMemory: false } held) { NoteMemoryHeld(held); return; }
         if (!mem!.IsAlive) { Detach("Civ closed", mem.ExitCode); return; }
-        if (memoryWasHeld)
-        {
-            // A workload pause is an observation gap, not game actions that all happened at resume time.
-            pipe?.ResetAfterCaptureGap(memoryHeldWhy);
-            reader = new StateReader(taping!, found!.GameCore!.Base, found.Layout!);
-            quietSeen = (-1, -1, -1);
-            quietUntilMs = clock.ElapsedMilliseconds + QuietMs;
-            recoveryStartedMs = clock.ElapsedMilliseconds;
-            Diagnostics?.Activity("Memory capture settling", "Basic checks precede a gradual return to the requested sample rate");
-            memoryWasHeld = false;
-        }
+        if (memoryWasHeld) SettleAfterHold();
         sampleUs = clock.Elapsed.Ticks / 10;
         var t0 = clock.Elapsed;
         // loading or just found: only the globals until the game has looked the same for QuietMs (nothing in flux is followed)
-        if (clock.ElapsedMilliseconds < quietUntilMs)
-        {
-            var (hs, ht, hw, hh) = reader!.ReadHeader();
-            if (hs != SampleStatus.NoGame) {
-                Status = Status with { MenuObservedAt = null };
-                if (Workload is { } activeWorkload) activeWorkload.GameIdle = false;
-            }
-            if (hs == SampleStatus.LayoutMismatch || hs == SampleStatus.Unreadable) { Detach(hs == SampleStatus.Unreadable ? "game core unloaded" : "layout mismatch"); return; }
-            if (hs != SampleStatus.Ok || (ht, hw, hh) != quietSeen) { quietSeen = (ht, hw, hh); quietUntilMs = clock.ElapsedMilliseconds + QuietMs; }
-            pipe?.Step(SampleStatus.NoGame, null, sampleUs / 1000);
-            rec?.Flush();
-            var lobbyNow = hs == SampleStatus.NoGame ? LookAtLobby() : Status.Lobby;
-            Status = Status with { State = rec is null ? "Civ found; waiting for a game" : "Game paused / in menus / loading", Lobby = lobbyNow };
-            return;
-        }
-        if (ExperimentalMemoryCapture)
-        {
-            // Uses the existing verified globals only; no detailed objects during the observed-turn pause.
-            var header = reader!.ReadHeader();
-            if (header.Status == SampleStatus.Ok)
-            {
-                Status = Status with { MenuObservedAt = null };
-                if (Workload is { } activeWorkload) activeWorkload.GameIdle = false;
-                if (turnQuiet.Observe(header.Turn))
-                {
-                    rec?.Write("sampling_paused", header.Turn, new Dictionary<string, object?>
-                    {
-                        ["reason"] = "turn_transition", ["durationMs"] = 5000,
-                        ["note"] = "Detailed reads paused; actions during this interval may be missed.",
-                    });
-                    rec?.Flush();
-                }
-                if (TurnTransitionQuiet)
-                {
-                    Status = Status with { State = "Giving Civ time to start the turn" };
-                    return;
-                }
-            }
-            else turnQuiet.Reset();
-        }
+        if (clock.ElapsedMilliseconds < quietUntilMs) { QuietLook(); return; }
+        if (ExperimentalMemoryCapture && InTurnTransition()) return;
         if (!TrackLogs || recordingOff) return;
         taping!.Tape = CaptureMoves ? tape : null;
         taping.Begin(sampleUs);
-        try
-        {
-            var (status, snap, why) = reader!.Read(sampleUs / 1000);
-            if (status != SampleStatus.NoGame) Status = Status with { MenuObservedAt = null };
-            if (status == SampleStatus.NoGame) { quietUntilMs = clock.ElapsedMilliseconds + QuietMs; quietSeen = (-1, -1, -1); }
-            if (status == SampleStatus.LayoutMismatch)
-            {
-                Notice?.Invoke("Recording stopped", $"Civ's memory no longer looks as expected ({why}).");
-                taping.End((clock.Elapsed - t0).TotalMilliseconds);
-                var refused = found;
-                Detach("layout mismatch: " + why);
-                lastRefusedPid = refused?.ProcessId ?? -1; refusedHash = refused?.GameCoreSha256; refusedReason = why;
-                if (refused is not null && RecordingEnabled && BackupUnsupportedEnabled)
-                {
-                    unsupportedProcess = refused.ProcessId;
-                    unsupported = new UnsupportedBackup(settings.OutputFolder, refused.ProcessId, refused.GameCoreSha256!, why ?? "Layout changed");
-                    Status = Status with { UnsupportedBackingUp = true, UnsupportedFolder = unsupported.Folder, UnsupportedSaves = 0 };
-                }
-                return;
-            }
-            if (status == SampleStatus.Unreadable) { taping.End(0); Detach("game core unloaded"); return; } // mod switched: look again
-            string? seenId = null;
-            // a game still loading (no players built yet) says nothing about which game it is: the pipeline waits it out
-            if (status == SampleStatus.Ok && snap is not null && GamePipeline.IsLoaded(snap))
-            {
-                var id = seenId = GamePipeline.IdentityOf(snap);
-                if (pauseCurrent && rec is not null) { pausedIdentity = identity; pauseCurrent = false; EndGame("paused by the player", "paused"); }
-                else if (pauseCurrent) { pausedIdentity = id; pauseCurrent = false; }
-                if (rec is not null && id != identity) EndGame("another game was started");
-                if (recordingOff && rec is not null) EndGame("recording switched off", "paused");
-                // single player off: such a game is not started (one that is being recorded already goes on)
-                bool spSkip = rec is null && snap.GameType == 0 && !recordSinglePlayer && id != singlePlayerAllowed;
-                if (spSkip && singlePlayerTold != id)
-                {
-                    singlePlayerTold = id;
-                    Notice?.Invoke("Single-player game — not recorded", $"Turn {snap.Turn}. Single-player games are off in Settings (for testing, coming later).");
-                }
-                bool skip = recordingOff || id == pausedIdentity || IsDeletedIdentity(id) || spSkip;
-                if (rec is null && !skip)
-                {
-                    BeginGame(snap, id); taping.Begin(sampleUs);
-                    // Only a raw tape needs a repeated baseline; the lightweight experiment keeps one sample.
-                    if (tape is not null) snap = reader.Read(sampleUs / 1000).Snapshot ?? snap;
-                }
-                if (entry is not null && clock.ElapsedMilliseconds - lastIndexWriteMs > 30_000) { index.Save(entry with { LastSeen = DateTimeOffset.UtcNow }); lastIndexWriteMs = clock.ElapsedMilliseconds; }
-            }
-            if (pipe is not null) pipe.CaptureMoves = CaptureMoves;
-            pipe?.Step(status, snap, sampleUs / 1000);
-            // a heartbeat every ~10 s while recording: quiet stretches are not a stalled recorder, and the real cost is in the data
-            if (CaptureMoves && rec is not null && clock.ElapsedMilliseconds >= nextHeartbeatMs)
-            {
-                nextHeartbeatMs = clock.ElapsedMilliseconds + 10_000;
-                rec.Write("heartbeat", snap?.Turn ?? Status.Turn, new Dictionary<string, object?>
-                {
-                    ["state"] = "alive", ["looksPerSecond"] = Status.LooksPerSecond, ["looksPerSecondWanted"] = Status.LooksPerSecondWanted,
-                    ["msPerLook"] = Status.LookMs, ["corePercent"] = Math.Round(Status.LookMs * Status.LooksPerSecond / 10, 2),
-                    ["refusedReads"] = mem?.Refused, ["units"] = snap?.Units.Count, ["cities"] = snap?.Cities.Count,
-                });
-            }
-            rec?.Flush();
-            // no game running: look at the pre-game once a second for a multiplayer staging room (read-only, not on the tape)
-            LobbySnapshot? lobby = status == SampleStatus.NoGame ? LookAtLobby() : rec is not null ? null : Status.Lobby;
-            var me = snap?.ActivePlayer ?? -1;
-            bool loaded = snap is not null && GamePipeline.IsLoaded(snap);
-            Status = Status with
-            {
-                Lobby = lobby,
-                Identity = identity ?? (loaded ? seenId : Status.Identity),
-                Players = loaded ? snap!.Players.Where(p => p.Id != BarbarianId).ToList() : Status.Players,
-                ActivePlayer = loaded ? snap!.ActivePlayer : Status.ActivePlayer,
-                Paused = recordingOff || ((seenId ?? Status.Identity) is { } sid && (sid == pausedIdentity || IsDeletedIdentity(sid))),
-                SinglePlayerSkipped = rec is null && loaded && snap!.GameType == 0 && !recordSinglePlayer && seenId != singlePlayerAllowed,
-                State = rec is null ? (loaded ? "Civ found; game not recorded" : "Civ found; waiting for a game") : !loaded ? "Game paused / in menus / loading" : "Recording",
-                Recording = rec is not null, Turn = snap?.Turn ?? Status.Turn,
-                MyUnits = snap?.Units.Count(u => u.Owner == me) ?? 0, MyCities = snap?.Cities.Count(c => c.Owner == me) ?? 0,
-                Mode = snap?.GameType switch { 0 => "single player", 1 => "multiplayer", 2 => "hot seat", 3 => "e-mail", _ => Status.Mode },
-                Events = rec?.Count ?? 0, Folder = rec?.Folder ?? Status.Folder,
-                TapeBytes = tape is null ? null : new FileInfo(tape.Path).Length, Context = entry?.Context,
-            };
-        }
+        try { ReadAndRecord(t0); }
         finally { taping?.End((clock.Elapsed - t0).TotalMilliseconds); }
+    }
+
+    /// <summary>The resource budget holds memory reading: remembered, so the next look starts a fresh baseline.</summary>
+    void NoteMemoryHeld(WorkloadPolicy held)
+    {
+        memoryWasHeld = true; memoryHeldWhy = held.Reason;
+        Diagnostics?.Activity("Memory capture deferred", held.Reason);
+        Status = Status with { State = held.Reason, LooksPerSecond = 0 };
+    }
+
+    /// <summary>A workload pause is an observation gap, not game actions that all happened at resume time: a fresh reader and
+    /// baseline after a quiet window, then a gradual return to the requested pace.</summary>
+    void SettleAfterHold()
+    {
+        pipe?.ResetAfterCaptureGap(memoryHeldWhy);
+        reader = new StateReader(taping!, found!.GameCore!.Base, found.Layout!);
+        quietSeen = (-1, -1, -1);
+        quietUntilMs = clock.ElapsedMilliseconds + QuietMs;
+        recoveryStartedMs = clock.ElapsedMilliseconds;
+        Diagnostics?.Activity("Memory capture settling", "Basic checks precede a gradual return to the requested sample rate");
+        memoryWasHeld = false;
+    }
+
+    /// <summary>The quiet window: only the globals, until the turn and map size stayed the same for <see cref="QuietMs"/>.</summary>
+    void QuietLook()
+    {
+        var (hs, ht, hw, hh) = reader!.ReadHeader();
+        if (hs != SampleStatus.NoGame)
+        {
+            Status = Status with { MenuObservedAt = null };
+            if (Workload is { } activeWorkload) activeWorkload.GameIdle = false;
+        }
+        if (hs == SampleStatus.LayoutMismatch || hs == SampleStatus.Unreadable) { Detach(hs == SampleStatus.Unreadable ? "game core unloaded" : "layout mismatch"); return; }
+        if (hs != SampleStatus.Ok || (ht, hw, hh) != quietSeen) { quietSeen = (ht, hw, hh); quietUntilMs = clock.ElapsedMilliseconds + QuietMs; }
+        pipe?.Step(SampleStatus.NoGame, null, sampleUs / 1000);
+        rec?.Flush();
+        var lobbyNow = hs == SampleStatus.NoGame ? LookAtLobby() : Status.Lobby;
+        Status = Status with { State = rec is null ? "Civ found; waiting for a game" : "Game paused / in menus / loading", Lobby = lobbyNow };
+    }
+
+    /// <summary>The experimental capture's new-turn pause: true while detailed reads wait (only the verified globals are read).</summary>
+    bool InTurnTransition()
+    {
+        var header = reader!.ReadHeader();
+        if (header.Status != SampleStatus.Ok) { turnQuiet.Reset(); return false; }
+        Status = Status with { MenuObservedAt = null };
+        if (Workload is { } activeWorkload) activeWorkload.GameIdle = false;
+        if (turnQuiet.Observe(header.Turn))
+        {
+            rec?.Write("sampling_paused", header.Turn, new Dictionary<string, object?>
+            {
+                ["reason"] = "turn_transition", ["durationMs"] = 5000,
+                ["note"] = "Detailed reads paused; actions during this interval may be missed.",
+            });
+            rec?.Flush();
+        }
+        if (!TurnTransitionQuiet) return false;
+        Status = Status with { State = "Giving Civ time to start the turn" };
+        return true;
+    }
+
+    /// <summary>One taped read of the game, fed to the recording (opening or closing it as the game asks), then the window.</summary>
+    void ReadAndRecord(TimeSpan t0)
+    {
+        var (status, snap, why) = reader!.Read(sampleUs / 1000);
+        if (status != SampleStatus.NoGame) Status = Status with { MenuObservedAt = null };
+        if (status == SampleStatus.NoGame) { quietUntilMs = clock.ElapsedMilliseconds + QuietMs; quietSeen = (-1, -1, -1); }
+        if (status == SampleStatus.LayoutMismatch) { RefuseAfterMismatch(why, t0); return; }
+        if (status == SampleStatus.Unreadable) { taping!.End(0); Detach("game core unloaded"); return; } // mod switched: look again
+        string? seenId = null;
+        // a game still loading (no players built yet) says nothing about which game it is: the pipeline waits it out
+        if (status == SampleStatus.Ok && snap is not null && GamePipeline.IsLoaded(snap)) (seenId, snap) = OpenOrCloseGame(snap);
+        if (pipe is not null) pipe.CaptureMoves = CaptureMoves;
+        pipe?.Step(status, snap, sampleUs / 1000);
+        // a heartbeat every ~10 s while recording: quiet stretches are not a stalled recorder, and the real cost is in the data
+        if (CaptureMoves && rec is not null && clock.ElapsedMilliseconds >= nextHeartbeatMs)
+        {
+            nextHeartbeatMs = clock.ElapsedMilliseconds + 10_000;
+            rec.Write("heartbeat", snap?.Turn ?? Status.Turn, new Dictionary<string, object?>
+            {
+                ["state"] = "alive", ["looksPerSecond"] = Status.LooksPerSecond, ["looksPerSecondWanted"] = Status.LooksPerSecondWanted,
+                ["msPerLook"] = Status.LookMs, ["corePercent"] = Math.Round(Status.LookMs * Status.LooksPerSecond / 10, 2),
+                ["refusedReads"] = mem?.Refused, ["units"] = snap?.Units.Count, ["cities"] = snap?.Cities.Count,
+            });
+        }
+        rec?.Flush();
+        ShowSample(status, snap, seenId);
+    }
+
+    /// <summary>Civ's memory stopped matching the layout: the recording ends, this Civ is not read again until it restarts,
+    /// and its autosaves are kept locally instead.</summary>
+    void RefuseAfterMismatch(string why, TimeSpan t0)
+    {
+        Notice?.Invoke("Recording stopped", $"Civ's memory no longer looks as expected ({why}).");
+        taping!.End((clock.Elapsed - t0).TotalMilliseconds);
+        var refused = found;
+        Detach("layout mismatch: " + why);
+        lastRefusedPid = refused?.ProcessId ?? -1; refusedHash = refused?.GameCoreSha256; refusedReason = why;
+        if (refused is not null && RecordingEnabled && BackupUnsupportedEnabled) StartUnsupported(refused.ProcessId, refused.GameCoreSha256, why);
+    }
+
+    /// <summary>
+    /// A loaded game was seen: pauses, ends or starts its recording as the player chose (paused, deleted, single player off,
+    /// recording off). Returns its identity and the sample to feed on (read again inside the tape when a recording began).
+    /// </summary>
+    (string Id, GameSnapshot Snap) OpenOrCloseGame(GameSnapshot snap)
+    {
+        var id = GamePipeline.IdentityOf(snap);
+        if (pauseCurrent && rec is not null) { pausedIdentity = identity; pauseCurrent = false; EndGame("paused by the player", "paused"); }
+        else if (pauseCurrent) { pausedIdentity = id; pauseCurrent = false; }
+        if (rec is not null && id != identity) EndGame("another game was started");
+        if (recordingOff && rec is not null) EndGame("recording switched off", "paused");
+        // single player off: such a game is not started (one that is being recorded already goes on)
+        bool spSkip = rec is null && snap.GameType == 0 && !recordSinglePlayer && id != singlePlayerAllowed;
+        if (spSkip && singlePlayerTold != id)
+        {
+            singlePlayerTold = id;
+            Notice?.Invoke("Single-player game — not recorded", $"Turn {snap.Turn}. Single-player games are off in Settings (for testing, coming later).");
+        }
+        bool skip = recordingOff || id == pausedIdentity || IsDeletedIdentity(id) || spSkip;
+        if (rec is null && !skip)
+        {
+            BeginGame(snap, id); taping!.Begin(sampleUs);
+            // Only a raw tape needs a repeated baseline; the lightweight experiment keeps one sample.
+            if (tape is not null) snap = reader!.Read(sampleUs / 1000).Snapshot ?? snap;
+        }
+        if (entry is not null && clock.ElapsedMilliseconds - lastIndexWriteMs > 30_000) { index.Save(entry with { LastSeen = DateTimeOffset.UtcNow }); lastIndexWriteMs = clock.ElapsedMilliseconds; }
+        return (id, snap);
+    }
+
+    /// <summary>The window after a look (and, with no game running, a look at the pre-game for a staging room).</summary>
+    void ShowSample(SampleStatus status, GameSnapshot? snap, string? seenId)
+    {
+        // no game running: look at the pre-game once a second for a multiplayer staging room (read-only, not on the tape)
+        LobbySnapshot? lobby = status == SampleStatus.NoGame ? LookAtLobby() : rec is not null ? null : Status.Lobby;
+        var me = snap?.ActivePlayer ?? -1;
+        bool loaded = snap is not null && GamePipeline.IsLoaded(snap);
+        Status = Status with
+        {
+            Lobby = lobby,
+            Identity = identity ?? (loaded ? seenId : Status.Identity),
+            Players = loaded ? snap!.Players.Where(p => p.Id != BarbarianId).ToList() : Status.Players,
+            ActivePlayer = loaded ? snap!.ActivePlayer : Status.ActivePlayer,
+            Paused = recordingOff || ((seenId ?? Status.Identity) is { } sid && (sid == pausedIdentity || IsDeletedIdentity(sid))),
+            SinglePlayerSkipped = rec is null && loaded && snap!.GameType == 0 && !recordSinglePlayer && seenId != singlePlayerAllowed,
+            State = rec is null ? (loaded ? "Civ found; game not recorded" : "Civ found; waiting for a game") : !loaded ? "Game paused / in menus / loading" : "Recording",
+            Recording = rec is not null, Turn = snap?.Turn ?? Status.Turn,
+            MyUnits = snap?.Units.Count(u => u.Owner == me) ?? 0, MyCities = snap?.Cities.Count(c => c.Owner == me) ?? 0,
+            Mode = snap?.GameType switch { 0 => "single player", 1 => "multiplayer", 2 => "hot seat", 3 => "e-mail", _ => Status.Mode },
+            Events = rec?.Count ?? 0, Folder = rec?.Folder ?? Status.Folder,
+            TapeBytes = tape is null ? null : new FileInfo(tape.Path).Length, Context = entry?.Context,
+        };
     }
 
     /// <summary>
@@ -662,7 +686,7 @@ public sealed class RecorderSession : IDisposable
         // a fresh reader: its name caches must start empty so every read it makes is on the tape (replay = live)
         reader = new StateReader(taping, found!.GameCore!.Base, found.Layout!);
         var known = index.Find(id, DateTimeOffset.UtcNow);
-        var folder = known?.Folder ?? Path.Combine(settings.OutputFolder, $"session-{DateTime.Now:yyyyMMddTHHmmss}-{found!.ProcessId}");
+        var folder = known?.Folder ?? Path.Combine(settings.OutputFolder, SessionFolderName(found!.ProcessId.ToString(CultureInfo.InvariantCulture)));
         entry = new GameEntry { Identity = id, Folder = folder, Context = known?.Context ?? GameIndex.NewContext(), ProcessId = found!.ProcessId, LastSeen = DateTimeOffset.UtcNow };
         index.Save(entry); lastIndexWriteMs = clock.ElapsedMilliseconds;
         int previousTurn = known is null ? -1 : JsonlRecording.LastTurn(Path.Combine(folder, "events.jsonl")) ?? -1;
@@ -673,26 +697,19 @@ public sealed class RecorderSession : IDisposable
             tape = new TapeWriter(folder, new TapeHeader
             {
                 Layout = found.Layout!.Id, CoreSha256 = found.GameCoreSha256!, ModuleBase = found.GameCore!.Base,
-                SampleMs = SampleMs, Reads = 3, Started = DateTimeOffset.Now.ToString("o"),
+                SampleMs = SampleMs, Reads = TapeReplay.CurrentReads, Started = DateTimeOffset.Now.ToString("o"),
             });
             taping.Tape = tape;
         }
         pipe = new GamePipeline(rec, reader!.UnitTypeKey, settings.SnapshotEachTurn || ExperimentalMemoryCapture, previousTurn);
-        rec.Write("recording_profile", s.Turn, new Dictionary<string, object?>
-        {
-            ["recorder"] = "FFACiv Outside Recorder", ["method"] = "read-only memory sampling", ["sampleMs"] = SampleMs,
-            ["cityMicroMs"] = reader.CityMicroEveryMs, ["cityMicroAvailable"] = found.Layout!.CityMicro is not null,
-            ["layout"] = found.Layout!.Id, ["mod"] = found.Layout.Name, ["coreSha256"] = found.GameCoreSha256, ["corePath"] = found.GameCore!.Path,
-            ["exe"] = found.ExeName, ["inGameRecorderAlsoLoaded"] = found.InGameRecorderLoaded,
-            ["autosaveTiming"] = found.Layout.AutosaveAtTurnStart ? "start_of_turn" : "end_of_turn",
-            ["gameType"] = s.GameType, ["activePlayer"] = s.ActivePlayer, ["mapWidth"] = s.MapWidth, ["mapHeight"] = s.MapHeight,
-            ["identity"] = id, ["context"] = entry.Context, ["mapSeed"] = s.MapSeed, ["syncSeed"] = s.SyncSeed, ["tape"] = tape is not null,
-            ["processId"] = found.ProcessId, ["recorderStarted"] = recorderStarted.ToString("o"),
-            ["turnTransitionQuietMs"] = ExperimentalMemoryCapture ? 5000 : 0,
-            ["autosaveWarning"] = Status.AutosaveWarning, ["channel"] = channel?.Id,
-            ["turnTimerSeconds"] = s.TurnTimer?.TurnSeconds,
-            ["turnTimer"] = s.TurnTimer is { } tt ? new Dictionary<string, object?> { ["enabled"] = tt.Enabled, ["type"] = tt.Type, ["seconds"] = tt.Seconds } : null,
-        });
+        var profile = ProfileData(s, found.Layout!, found.GameCoreSha256, "read-only memory sampling", SampleMs, id, entry.Context,
+            tape is not null, found.ProcessId, recorderStarted.ToString("o"));
+        profile["cityMicroMs"] = reader.CityMicroEveryMs; profile["cityMicroAvailable"] = found.Layout!.CityMicro is not null;
+        profile["corePath"] = found.GameCore!.Path; profile["exe"] = found.ExeName; profile["inGameRecorderAlsoLoaded"] = found.InGameRecorderLoaded;
+        profile["turnTransitionQuietMs"] = ExperimentalMemoryCapture ? 5000 : 0;
+        profile["autosaveWarning"] = Status.AutosaveWarning; profile["channel"] = channel?.Id;
+        profile["turnTimerSeconds"] = s.TurnTimer?.TurnSeconds; profile["turnTimer"] = s.TurnTimer?.Data();
+        rec.Write("recording_profile", s.Turn, profile);
         // why this recording (re)starts: a new game, or the same game back after Civ or the recorder restarted
         rec.Write("lifecycle", s.Turn, new Dictionary<string, object?>
         {
@@ -705,14 +722,45 @@ public sealed class RecorderSession : IDisposable
         Notice?.Invoke("Recording game", $"Turn {s.Turn}, {s.Players.Count(p => p.Alive && p.Id != 63)} players, {ModeName(s.GameType)}.");
     }
 
+    /// <summary>
+    /// The fields every recording's first line ("recording_profile") has: who wrote it and how, the DLL that was read, and
+    /// the game's identity, map and seeds (the converter needs them). The live recorder and the stream test add their own.
+    /// </summary>
+    internal static Dictionary<string, object?> ProfileData(GameSnapshot s, GameCoreLayout layout, string? coreSha256, string method,
+        int sampleMs, string identity, string context, bool tape, int processId, string recorderStarted) => new()
+    {
+        ["recorder"] = "FFACiv Outside Recorder", ["method"] = method, ["sampleMs"] = sampleMs,
+        ["layout"] = layout.Id, ["mod"] = layout.Name, ["coreSha256"] = coreSha256,
+        ["autosaveTiming"] = layout.AutosaveAtTurnStart ? "start_of_turn" : "end_of_turn",
+        ["gameType"] = s.GameType, ["activePlayer"] = s.ActivePlayer, ["mapWidth"] = s.MapWidth, ["mapHeight"] = s.MapHeight,
+        ["identity"] = identity, ["context"] = context, ["mapSeed"] = s.MapSeed, ["syncSeed"] = s.SyncSeed, ["tape"] = tape,
+        ["processId"] = processId, ["recorderStarted"] = recorderStarted,
+    };
+
     /// <summary>The players' number of the barbarians (not shown as a player).</summary>
     public const int BarbarianId = 63;
+
+    const string SessionTimeFormat = "yyyyMMdd'T'HHmmss";
+
+    /// <summary>"session-20261027T152244-<paramref name="suffix"/>" for a recording starting now: local time in Western digits
+    /// and calendar on every Windows language, so <see cref="StartedOf"/> reads it back.</summary>
+    public static string SessionFolderName(string suffix) => $"session-{DateTime.Now.ToString(SessionTimeFormat, CultureInfo.InvariantCulture)}-{suffix}";
 
     /// <summary>"session-20261027T152244-19836" -> that local time.</summary>
     public static DateTimeOffset? StartedOf(string? folder)
     {
         var m = folder is null ? null : Regex.Match(Path.GetFileName(folder), @"session-(\d{8}T\d{6})");
-        return m is { Success: true } && DateTime.TryParseExact(m.Groups[1].Value, "yyyyMMdd'T'HHmmss", null, System.Globalization.DateTimeStyles.AssumeLocal, out var d) ? d : null;
+        return m is { Success: true } && DateTime.TryParseExact(m.Groups[1].Value, SessionTimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var d) ? d : null;
+    }
+
+    /// <summary>Civ keeps single-player autosaves in ...\Saves\single\auto (also under ModdedSaves). Only the save's own two
+    /// folders count, so a Windows user or OneDrive folder called "single" does not hide multiplayer saves.</summary>
+    public static bool InSinglePlayerFolder(string savePath)
+    {
+        var folder = Path.GetDirectoryName(savePath);
+        for (int i = 0; i < 2 && !string.IsNullOrEmpty(folder); i++, folder = Path.GetDirectoryName(folder))
+            if (Path.GetFileName(folder).Equals("single", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     /// <summary>When the newest save copy of a recording was written, or null.</summary>
@@ -807,7 +855,7 @@ public sealed class RecorderSession : IDisposable
 
     bool CopiesHeld()
     {
-        if (Workload is not { CanStartHeavyWork: false }) return false;
+        if (Workload is not { CanCopySaves: false }) return false;
         autosaves.Poll(reportReady: false); // update stability, but do not consume any ready notification
         Diagnostics?.Activity("Autosave copying deferred", Workload.Reason);
         return true;
@@ -829,77 +877,159 @@ public sealed class RecorderSession : IDisposable
         }
     }
 
+    /// <summary>Memory mode's save copies: into the open recording, an unsupported build's backup, or (no recording open) the
+    /// files-only capture. Saves are noticed in every state; during the new-turn pause they only queue.</summary>
     void PollAutosavesCore()
     {
+        if (TurnTransitionQuiet) { autosaves.Poll(reportReady: false); return; }
         if (CopiesHeld()) return;
         var todo = PendingCopies();
-        if (rec is null)
+        if (rec is not null) CopyOneSave(todo, "Copying a realtime-session autosave", CopyIntoRecording, WriteAutosaveLine);
+        else if (unsupported is not null && RecordingEnabled && BackupUnsupportedEnabled)
         {
-            bool attemptedBackup = false;
-            if (unsupported is not null && RecordingEnabled && BackupUnsupportedEnabled)
-                foreach (var (save, tries) in todo)
-                {
-                    if (attemptedBackup || Workload is { CanStartHeavyWork: false }) { RetryCopy(save, tries); continue; }
-                    attemptedBackup = true;
-                    Diagnostics?.Activity("Copying an unsupported-build autosave");
-                    try
-                    {
-                        var copy = unsupported.Capture(save);
-                        if (copy == false) Diagnostics?.Activity("Autosave excluded", "KEK games are supplied separately");
-                        else CopyOutcome(save, tries, copy == true ? "copied" : null);
-                        if (copy is null && tries + 1 < CopyTries) RetryCopy(save, tries + 1);
-                    }
-                    catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                    { Diagnostics?.Error("Autosave backup", e); if (tries + 1 < CopyTries) RetryCopy(save, tries + 1); Status = Status with { LastError = "Autosave backup: " + e.Message }; }
-                    Status = Status with { UnsupportedBackingUp = !unsupported.KekExcluded, UnsupportedKek = unsupported.KekExcluded,
-                        UnsupportedFolder = unsupported.Folder, UnsupportedSaves = unsupported.Saves };
-                }
+            CopyOneSave(todo, "Copying an unsupported-build autosave", BackUpUnsupported);
+            ShowUnsupported();
+        }
+        else CopyWithoutRecording(todo);
+    }
+
+    /// <summary>What one attempt to copy a ready save came to.</summary>
+    enum CopyResult
+    {
+        /// <summary>The copy is made.</summary>
+        Copied,
+        /// <summary>Not now (Civ still has it, it changed): tried again on a later poll, up to <see cref="CopyTries"/> attempts.</summary>
+        RetryLater,
+        /// <summary>Never copied (a KEK save: Oblast supplies those).</summary>
+        Excluded,
+        /// <summary>The source is gone, or the copy failed for good.</summary>
+        Gone,
+    }
+
+    /// <summary>
+    /// The one copy a poll makes: the first ready save (fewest attempts first) when heavy work may start; every other save
+    /// waits with its attempt count (resource and queue waits never spend the retry budget). <paramref name="leaveOut"/>
+    /// saves are dropped. <paramref name="finished"/> hears of an attempt that is not retried. Saves not dealt with go back to
+    /// the queue even when something throws: one error must not lose the saves after it.
+    /// </summary>
+    void CopyOneSave(List<(AutosaveSeen Save, int Tries)> todo, string activity, Func<AutosaveSeen, (CopyResult Result, string? Copy, string? Error)> copy,
+        Action<AutosaveSeen, int, CopyResult, string?, string?>? finished = null, Func<AutosaveSeen, bool>? leaveOut = null)
+    {
+        int next = 0;   // todo[next..] are not dealt with yet
+        try
+        {
+            bool attempted = false;
+            while (next < todo.Count)
+            {
+                var (save, tries) = todo[next];
+                if (leaveOut?.Invoke(save) == true) { next++; continue; }
+                if (attempted || Workload is { CanCopySaves: false }) { RetryCopy(save, tries); next++; continue; }
+                attempted = true;
+                Diagnostics?.Activity(activity);
+                (CopyResult Result, string? Copy, string? Error) outcome;
+                try { outcome = copy(save); }
+                catch { if (tries + 1 < CopyTries) RetryCopy(save, tries + 1); next++; throw; }   // an unexpected error is a failed attempt
+                next++;
+                if (outcome.Result is CopyResult.Copied or CopyResult.RetryLater) CopyOutcome(save, tries, outcome.Copy);
+                if (outcome.Result == CopyResult.RetryLater && tries + 1 < CopyTries) RetryCopy(save, tries + 1);
+                else finished?.Invoke(save, tries, outcome.Result, outcome.Copy, outcome.Error);
+            }
+        }
+        finally
+        {
+            for (; next < todo.Count; next++) RetryCopy(todo[next].Save, todo[next].Tries);
+        }
+    }
+
+    /// <summary>A copy in the recording's folder: Civ deletes old autosaves, and the stream sends from here. Never ends the
+    /// recording: an error is written on the save's line.</summary>
+    (CopyResult, string?, string?) CopyIntoRecording(AutosaveSeen save)
+    {
+        try
+        {
+            var dir = Path.Combine(rec!.Folder, "saves");
+            var copy = settings.SafeCapture || ExperimentalMemoryCapture ? SafeFiles.CopyStableSave(save, dir) : SafeFiles.CopySave(save.Path, dir, save.WriteTimeUtc);
+            return copy is not null ? (CopyResult.Copied, copy, null)
+                : File.Exists(save.Path) ? (CopyResult.RetryLater, null, null) : (CopyResult.Gone, null, "gone before it could be copied");
+        }
+        catch (Exception e) { Diagnostics?.Error("Autosave copy", e); return (CopyResult.Gone, null, $"{e.GetType().Name}: {e.Message}"); }
+    }
+
+    /// <summary>The recording's "autosave" line for a save copied or given up (and a "resync" line for a resync save).</summary>
+    void WriteAutosaveLine(AutosaveSeen a, int tries, CopyResult result, string? copy, string? error)
+    {
+        var r = rec!;
+        if (result == CopyResult.RetryLater) error = $"could not be read after {CopyTries} attempts";
+        if (copy is not null) Status = Status with { LastSaveAt = a.WriteTimeUtc.ToLocalTime() };
+        int? fileTurn = AutosaveTurn(a.Path);
+        bool? atStart = found?.Layout?.AutosaveAtTurnStart;
+        // a resync (multiplayer: the host's state replaced this PC's) — Civ writes AutoSave_Resync…; marked so the turn's
+        // jumps (a unit changing type, moves, the map id in the save) are known not to be play
+        if (Path.GetFileName(a.Path).Contains("Resync", StringComparison.OrdinalIgnoreCase))
+            r.Write("lifecycle", Status.Turn, new Dictionary<string, object?>
+            {
+                ["state"] = "resync", ["file"] = Path.GetFileName(a.Path), ["copy"] = copy is null ? null : Path.GetRelativePath(r.Folder, copy),
+                ["note"] = "the host's game state replaced this PC's; changes around it can come from the resync",
+            });
+        r.Write("autosave", Status.Turn, new Dictionary<string, object?>
+        {
+            ["path"] = a.Path, ["bytes"] = a.Size, ["writeTimeUtc"] = a.WriteTimeUtc.ToString("o"), ["folder"] = Path.GetDirectoryName(a.Path),
+            ["fileTurn"] = fileTurn, ["liveTurn"] = Status.Turn, ["copy"] = copy is null ? null : Path.GetRelativePath(r.Folder, copy),
+            ["copyTries"] = tries + 1, ["copyError"] = error,
+            // which samples the save should equal: stock BNW saves at the start of a turn, Lekmod/KEK at the end
+            ["timing"] = atStart switch { true => "start_of_turn", false => "end_of_turn", null => "unknown" },
+            ["compareWith"] = atStart switch
+            {
+                true => $"first sample of turn {fileTurn}",
+                false => $"last sample of turn {fileTurn} (before turn {fileTurn + 1} starts)",
+                null => null,
+            },
+        });
+        r.Flush();
+    }
+
+    /// <summary>An unsupported build's save, kept locally exactly as written (no memory read, no upload).</summary>
+    (CopyResult, string?, string?) BackUpUnsupported(AutosaveSeen save)
+    {
+        try
+        {
+            switch (unsupported!.Capture(save))
+            {
+                case true: return (CopyResult.Copied, "copied", null);
+                case false: Diagnostics?.Activity("Autosave excluded", "KEK games are supplied separately"); return (CopyResult.Excluded, null, null);
+                default: return (CopyResult.RetryLater, null, null);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Diagnostics?.Error("Autosave backup", e);
+            Status = Status with { LastError = "Autosave backup: " + e.Message };
+            return (CopyResult.RetryLater, null, e.Message);
+        }
+    }
+
+    /// <summary>
+    /// Memory mode with no memory recording open (not begun yet, reading held, after an error closed it, after Civ closed):
+    /// the save is kept the way save-files-only capture keeps it (a "files:" recording; the server groups saves by their
+    /// contents), never dropped. A paused or deleted game, and a single-player save while single player is off, keep none.
+    /// </summary>
+    void CopyWithoutRecording(List<(AutosaveSeen Save, int Tries)> todo)
+    {
+        // the player deleted the files-only capture itself: like save-files-only mode, its copying pauses (until Civ closes)
+        if (IsDeletedIdentity(saveOnly.Entry?.Identity)) { filesPaused = true; saveOnly.End(); }
+        bool notRecorded = pauseCurrent || filesPaused || Status.Identity is { } id && (id == pausedIdentity || IsDeletedIdentity(id));
+        if (notRecorded)
+        {
+            if (todo.Count > 0) Diagnostics?.Activity("Autosave not copied", "This game's recording is paused or deleted");
             return;
         }
-        bool attempted = false;
-        foreach (var (a, tries) in todo)
-        {
-            if (attempted || Workload is { CanStartHeavyWork: false }) { RetryCopy(a, tries); continue; }
-            attempted = true;
-            Diagnostics?.Activity("Copying a realtime-session autosave");
-            string? copy = null, error = null;
-            try
-            {
-                // a copy in the session folder: Civ deletes old autosaves, and the stream sends from here
-                copy = settings.SafeCapture || ExperimentalMemoryCapture ? SafeFiles.CopyStableSave(a, Path.Combine(rec.Folder, "saves"))
-                    : SafeFiles.CopySave(a.Path, Path.Combine(rec.Folder, "saves"), a.WriteTimeUtc);
-                CopyOutcome(a, tries, copy);
-                if (copy is null && File.Exists(a.Path) && tries + 1 < CopyTries) { RetryCopy(a, tries + 1); continue; }
-                if (copy is null) error = File.Exists(a.Path) ? $"could not be read after {CopyTries} attempts" : "gone before it could be copied";
-            }
-            catch (Exception e) { Diagnostics?.Error("Autosave copy", e); error = $"{e.GetType().Name}: {e.Message}"; }   // never ends the recording
-            if (copy is not null) Status = Status with { LastSaveAt = a.WriteTimeUtc.ToLocalTime() };
-            int? fileTurn = AutosaveTurn(a.Path);
-            bool? atStart = found?.Layout?.AutosaveAtTurnStart;
-            // a resync (multiplayer: the host's state replaced this PC's) — Civ writes AutoSave_Resync…; marked so the turn's
-            // jumps (a unit changing type, moves, the map id in the save) are known not to be play
-            if (Path.GetFileName(a.Path).Contains("Resync", StringComparison.OrdinalIgnoreCase))
-                rec.Write("lifecycle", Status.Turn, new Dictionary<string, object?>
-                {
-                    ["state"] = "resync", ["file"] = Path.GetFileName(a.Path), ["copy"] = copy is null ? null : Path.GetRelativePath(rec.Folder, copy),
-                    ["note"] = "the host's game state replaced this PC's; changes around it can come from the resync",
-                });
-            rec.Write("autosave", Status.Turn, new Dictionary<string, object?>
-            {
-                ["path"] = a.Path, ["bytes"] = a.Size, ["writeTimeUtc"] = a.WriteTimeUtc.ToString("o"), ["folder"] = Path.GetDirectoryName(a.Path),
-                ["fileTurn"] = fileTurn, ["liveTurn"] = Status.Turn, ["copy"] = copy is null ? null : Path.GetRelativePath(rec.Folder, copy),
-                ["copyTries"] = tries + 1, ["copyError"] = error,
-                // which samples the save should equal: stock BNW saves at the start of a turn, Lekmod/KEK at the end
-                ["timing"] = atStart switch { true => "start_of_turn", false => "end_of_turn", null => "unknown" },
-                ["compareWith"] = atStart switch
-                {
-                    true => $"first sample of turn {fileTurn}",
-                    false => $"last sample of turn {fileTurn} (before turn {fileTurn + 1} starts)",
-                    null => null,
-                },
-            });
-            rec.Flush();
-        }
+        CopyOneSave(todo, "Copying an autosave without a realtime session", CopySaveOnly, ShowSaveWithoutRecording,
+            save => !recordSinglePlayer && InSinglePlayerFolder(save.Path) && !(singlePlayerAllowed is { } allowed && allowed == Status.Identity));
+    }
+
+    void ShowSaveWithoutRecording(AutosaveSeen save, int tries, CopyResult result, string? copy, string? error)
+    {
+        if (result == CopyResult.Copied) Status = Status with { LastSaveAt = save.WriteTimeUtc.ToLocalTime() };
     }
 
     void CopyOutcome(AutosaveSeen save, int tries, string? copy)
@@ -929,32 +1059,9 @@ public sealed class RecorderSession : IDisposable
             if (pauseCurrent || IsDeletedIdentity(saveOnly.Entry?.Identity)) { filesPaused = true; pauseCurrent = false; saveOnly.End(); }
             bool held = !recordingOff && !filesPaused && CopiesHeld();
             var todo = held ? [] : PendingCopies();
+            // Multiplayer and single-player folders are distinguishable without parsing the save.
             if (!recordingOff && !filesPaused)
-            {
-                bool attempted = false;
-                foreach (var (save, tries) in todo)
-                {
-                    // Multiplayer and single-player folders are distinguishable without parsing the save.
-                    if (!recordSinglePlayer && save.Path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                        .Any(p => p.Equals("single", StringComparison.OrdinalIgnoreCase))) continue;
-                    // Only one copy per polling cycle. Later files retain their real IO-attempt count.
-                    if (attempted || Workload is { CanStartHeavyWork: false }) { RetryCopy(save, tries); continue; }
-                    attempted = true;
-                    Diagnostics?.Activity("Copying a settled autosave");
-                    string? copy;
-                    try { copy = saveOnly.Copy(save); }
-                    catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                    {
-                        if (tries + 1 < CopyTries) RetryCopy(save, tries + 1);
-                        Diagnostics?.Error("Autosave copy", e);
-                        Status = Status with { LastError = "Autosave copy: " + e.GetType().Name };
-                        continue;
-                    }
-                    CopyOutcome(save, tries, copy);
-                    if (copy is null && tries + 1 < CopyTries) { RetryCopy(save, tries + 1); continue; }
-                    if (copy is not null) Status = Status with { LastAutosave = Path.GetFileName(save.Path), LastSaveAt = save.WriteTimeUtc, Turn = AutosaveTurn(save.Path) };
-                }
-            }
+                CopyOneSave(todo, "Copying a settled autosave", CopySaveOnly, ShowSavedFile, save => !recordSinglePlayer && InSinglePlayerFolder(save.Path));
             Status = Status with { CivDetected = filesRunning, State = recordingOff ? "Manual upload only — automatic capture is off" : filesPaused ? "Save copying paused" : held ? Workload!.Reason + " — save copies waiting" : "Save files only — memory reading and logs are off",
                 Recording = !recordingOff && !filesPaused && saveOnly.Entry is not null, Paused = recordingOff || filesPaused, Folder = saveOnly.Entry?.Folder,
                 Context = saveOnly.Entry?.Context, Identity = null, Game = null, Players = [], ActivePlayer = null,
@@ -969,20 +1076,48 @@ public sealed class RecorderSession : IDisposable
         }
     }
 
+    /// <summary>Save-only capture: one settled save into the files-only recording.</summary>
+    (CopyResult, string?, string?) CopySaveOnly(AutosaveSeen save)
+    {
+        string? copy; bool excluded;
+        try { copy = saveOnly.Copy(save, out excluded); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Diagnostics?.Error("Autosave copy", e);
+            Status = Status with { LastError = "Autosave copy: " + e.GetType().Name };
+            return (CopyResult.RetryLater, null, null);
+        }
+        // a KEK save is left out for good: no 30 retries, no false "could not be copied" error
+        if (excluded) { Diagnostics?.Activity("Autosave not copied", "KEK Mod saves are supplied by Oblast"); return (CopyResult.Excluded, null, null); }
+        return copy is not null ? (CopyResult.Copied, copy, null) : (CopyResult.RetryLater, null, null);
+    }
+
+    void ShowSavedFile(AutosaveSeen save, int tries, CopyResult result, string? copy, string? error)
+    {
+        if (result == CopyResult.Copied) Status = Status with { LastAutosave = Path.GetFileName(save.Path), LastSaveAt = save.WriteTimeUtc, Turn = AutosaveTurn(save.Path) };
+    }
+
     void EndGame(string why, string state = "stopped", Dictionary<string, object?>? extra = null)
     {
         if (rec is null) return;
         pauseCurrent = false;
         var args = new Dictionary<string, object?> { ["state"] = state, ["reason"] = why };
         if (extra is not null) foreach (var (k, v) in extra) args[k] = v;
-        rec.Write("lifecycle", pipe is { LastTurn: >= 0 } ? pipe.LastTurn : null, args);
-        if (entry is not null) index.Save(entry with { LastSeen = DateTimeOffset.UtcNow });
-        entry = null;
         var n = rec.Count; var folder = rec.Folder;
-        if (taping is not null) taping.Tape = null;
-        tape?.Dispose(); tape = null;
-        rec.Dispose(); rec = null; pipe = null; identity = null;
-        Status = Status with { Recording = false, Context = null };
+        try
+        {
+            rec.Write("lifecycle", pipe is { LastTurn: >= 0 } ? pipe.LastTurn : null, args);
+            if (entry is not null) index.Save(entry with { LastSeen = DateTimeOffset.UtcNow });
+        }
+        finally
+        {
+            // closed and forgotten even when the last line or games.json could not be written (a full disk): the next
+            // EndGame must not meet the same broken recording again
+            entry = null;
+            if (taping is not null) taping.Tape = null;
+            try { tape?.Dispose(); } finally { tape = null; }
+            try { rec.Dispose(); } finally { rec = null; pipe = null; identity = null; Status = Status with { Recording = false, Context = null }; }
+        }
         Notice?.Invoke("Recording saved", $"{n} lines ({why}).\n{folder}");
     }
 
@@ -991,6 +1126,25 @@ public sealed class RecorderSession : IDisposable
         unsupported?.Dispose(); unsupported = null;
         Status = Status with { UnsupportedBackingUp = false, UnsupportedKek = false };
     }
+
+    /// <summary>Starts keeping this Civ's autosaves locally (no memory read, no upload; a backup already kept for the same
+    /// process and DLL goes on) and shows it in the window.</summary>
+    void StartUnsupported(int processId, string? coreHash, string reason)
+    {
+        if (unsupported is null || unsupported.CoreHash != coreHash || unsupportedProcess != processId)
+        {
+            CloseUnsupported();
+            unsupportedProcess = processId;
+            unsupported = new UnsupportedBackup(settings.OutputFolder, processId, coreHash, reason);
+        }
+        ShowUnsupported();
+    }
+
+    void ShowUnsupported() => Status = Status with
+    {
+        UnsupportedBackingUp = unsupported is not null && !unsupported.KekExcluded, UnsupportedKek = unsupported?.KekExcluded == true,
+        UnsupportedFolder = unsupported?.Folder, UnsupportedSaves = unsupported?.Saves ?? 0,
+    };
 
     void Detach(string why, uint? exitCode = null)
     {
@@ -1006,17 +1160,28 @@ public sealed class RecorderSession : IDisposable
         else if (why == "recorder closed") EndGame(why, "recorder_closed");
         else EndGame(why);
         if (mem is not null && civClosed) Notice?.Invoke("Civ closed", "The Outside Recorder waits for the next game.");
+        // the files-only capture of saves that came without a memory recording ends with Civ (the next Civ starts afresh)
+        if (civClosed) { saveOnly.Close(); filesPaused = false; }
         mem?.Dispose(); mem = null; reader = null; taping = null; found = null;
         Status = Status.CivGone();
+    }
+
+    /// <summary>What the capture thread closes when it ends, and <see cref="Dispose"/> when there never was one.</summary>
+    void CloseOwnedFiles()
+    {
+        try { CloseUnsupported(); } catch (Exception e) { Diagnostics?.Error("Unsupported backup at close", e); }
+        try { channel?.Dispose(); } catch (Exception e) { Diagnostics?.Error("Channel at close", e); }
+        channel = null;
     }
 
     /// <inheritdoc/>
     public void Dispose()
     {
         stop.Cancel();
-        thread?.Join(3000);
-        if (thread is null || !thread.IsAlive) PersistPendingCopies(force: true);
-        CloseUnsupported();
-        channel?.Dispose();
+        // a capture thread that does not end in time still uses the backup, the channel and the pending list: it closes
+        // them itself when it ends (the end of Loop), never here under its feet
+        if (thread is not null && !thread.Join(3000)) return;
+        if (thread is null) PersistPendingCopies(force: true);
+        CloseOwnedFiles();
     }
 }

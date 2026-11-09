@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace OutsideRecorderCore;
@@ -32,6 +33,61 @@ public sealed record OldSave
         using var m = new MemoryStream();
         s.CopyTo(m);
         return m.ToArray();
+    }
+}
+
+/// <summary>
+/// MD5s of save files by where they are, their size and time, kept in old-md5.json beside the recordings. The old-games list
+/// and an upload that goes on after a pause know which saves the site has without reading every file again: before, every
+/// start read and hashed every autosave on the PC and every recorded copy (about 1,700 files on the developer's PC), and
+/// every pause of an old-game upload started reading again from its first save.
+/// </summary>
+public sealed class SaveFingerprints
+{
+    readonly string? file;
+    readonly Dictionary<string, string> known = new(StringComparer.OrdinalIgnoreCase);
+    readonly object gate = new();
+    bool changed;
+
+    /// <summary>Kept in <paramref name="folder"/> (null: this run only).</summary>
+    public SaveFingerprints(string? folder)
+    {
+        file = folder is null ? null : System.IO.Path.Combine(folder, "old-md5.json");
+        try { if (file is not null && File.Exists(file)) foreach (var (k, v) in JsonSerializer.Deserialize<Dictionary<string, string>>(SafeFiles.ReadAllText(file)) ?? []) known[k] = v; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { }   // made again as saves are read
+    }
+
+    static string KeyOf(OldSave s) => $"{s.Key}|{s.Size}|{s.TimeUtc.Ticks}";
+
+    /// <summary>The save's MD5 when it was read before (same place, size and time), else null.</summary>
+    public string? Known(OldSave s) { lock (gate) return known.GetValueOrDefault(KeyOf(s)); }
+
+    /// <summary>The MD5 of <paramref name="bytes"/> (the save's contents), remembered for the save.</summary>
+    public string Of(OldSave s, byte[] bytes)
+    {
+        var md5 = OldGameScanner.Md5(bytes);
+        lock (gate) if (known.TryGetValue(KeyOf(s), out var was) ? was != md5 : true) { known[KeyOf(s)] = md5; changed = true; }
+        return md5;
+    }
+
+    /// <summary>The save's MD5, read only when not known yet.</summary>
+    public string Of(OldSave s) => Known(s) ?? Of(s, s.Read());
+
+    /// <summary>Writes what is new; saves that are gone are forgotten.</summary>
+    public void Save()
+    {
+        if (file is null) return;
+        Dictionary<string, string> copy;
+        lock (gate) { if (!changed) return; copy = new(known, StringComparer.OrdinalIgnoreCase); changed = false; }
+        foreach (var key in copy.Keys.ToArray())
+        {
+            var path = key[..key.IndexOf('|')];
+            int inZip = path.LastIndexOf('!');   // "<file>.zip!<entry>" (OldSave.Key)
+            if (inZip > 0 && path[..inZip].EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) path = path[..inZip];
+            if (!File.Exists(path)) copy.Remove(key);
+        }
+        try { Directory.CreateDirectory(System.IO.Path.GetDirectoryName(file)!); SafeFiles.Replace(file, JsonSerializer.Serialize(copy)); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { lock (gate) changed = true; }
     }
 }
 

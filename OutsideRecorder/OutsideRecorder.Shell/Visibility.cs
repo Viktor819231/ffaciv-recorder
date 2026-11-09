@@ -86,6 +86,7 @@ sealed class Visibility : IDisposable
                 {
                     var all = All();
                     if (!all.TryGetValue(id, out var now) || now.Changed != c.Changed) continue;   // changed meanwhile: the next round sends that
+                    if (error is not null && now.LastError == error) continue;   // the same answer again: no rewrite every 5 s
                     all[id] = now with { Confirmed = error is null, LastError = error };
                     SafeFiles.Replace(file, JsonSerializer.Serialize(all));
                 }

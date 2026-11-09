@@ -42,8 +42,8 @@ the installer's SHA-256 checksum, and GitHub keeps a signed build record that ti
   [`Layouts.cs`](OutsideRecorder/OutsideRecorder.Core/Layouts.cs). [`layouts/`](OutsideRecorder/layouts) records how
   each address was confirmed from the game's DLL. This works on Civ V Brave New World 1.0.3.279, LEKMOD v35.4.003 and
   Snowve 8.1.1–8.3.0. Other versions record saves only.
-* **Uploads.** Saves and logs go to ffaciv.com, the only server in the settings. With automatic uploads on, a finished game is sent once you're
-  back in Civ's main menu or have closed Civ. The replay then stays hidden for 2 hours before it goes public. You
+* **Uploads.** Saves and logs go to ffaciv.com, the only server in the settings. With automatic uploads on, a finished game is sent once you have
+  closed Civ. The replay then stays hidden for 2 hours before it goes public. You
   can keep any game on your PC instead, delete it, or make it public sooner.
 * **Not recorded:** single-player games (unless you turn that on) and KEK Mod games, which the KEK league collects
   itself.

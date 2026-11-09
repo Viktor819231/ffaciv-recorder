@@ -63,7 +63,7 @@ public sealed class SampleCostTests(ITestOutputHelper output)
             var mem = new ReplayMemory(); StateReader? reader = null;
             foreach (var (h, s) in TapeReader.Read(Path.Combine(session, "tape.bin.gz")))
             {
-                if (h is not null) { mem.Clear(); reader = new StateReader(mem, h.ModuleBase, KnownLayouts.All.Single(l => l.Id == h.Layout)) { BlockReads = h.Reads >= 2 }; continue; }
+                if (h is not null) { mem.Clear(); reader = TapeReplay.ReaderFor(h, mem); continue; }
                 mem.Apply(s!);
                 var sw = Stopwatch.StartNew();
                 var (st, snap, _) = reader!.Read(0);

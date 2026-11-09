@@ -2,13 +2,15 @@ using System.Buffers.Binary;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.Win32.SafeHandles;
 
 namespace OutsideRecorderCore;
 
 /// <summary>Read-only view of another process's memory (32-bit addresses). Tests use a fake.</summary>
 public interface IMemory
 {
-    /// <summary>Copies bytes at <paramref name="address"/>; false when the memory is not readable (freed, unmapped).</summary>
+    /// <summary>Copies bytes at <paramref name="address"/>; false when the memory is not readable (freed, unmapped). After
+    /// false the buffer's contents are undefined (a read may stop part-way).</summary>
     bool TryRead(uint address, Span<byte> buffer);
 }
 
@@ -67,13 +69,19 @@ public sealed class ProcessMemory : IMemory, IDisposable
 {
     const uint PROCESS_VM_READ = 0x0010;
     const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-    readonly nint handle;
+    /// <summary>Closed once, by <see cref="Dispose"/>; a call still running on it keeps it open until that call returns.</summary>
+    readonly SafeProcessHandle handle;
 
     /// <summary>Opens the process read-only; throws when Windows refuses (e.g. Civ runs as administrator and we do not).</summary>
     public ProcessMemory(int processId)
     {
         handle = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)processId);
-        if (handle == 0) throw new Win32Exception(Marshal.GetLastWin32Error(), $"cannot open process {processId} for reading");
+        if (handle.IsInvalid)
+        {
+            int error = Marshal.GetLastWin32Error();
+            handle.Dispose();
+            throw new Win32Exception(error, $"cannot open process {processId} for reading");
+        }
     }
 
     /// <summary>True while the process has not exited.</summary>
@@ -148,17 +156,17 @@ public sealed class ProcessMemory : IMemory, IDisposable
     }
 
     /// <inheritdoc/>
+    /// <remarks>Reads straight into <paramref name="buffer"/>: no second buffer (the tile table is ~5 MB on a huge map).</remarks>
     public bool TryRead(uint address, Span<byte> buffer)
     {
         if (address < 0x10000) return false;
         if (Guarded && !Allowed(address, buffer.Length)) { Refused++; return false; }
-        var tmp = buffer.Length <= scratch.Length ? scratch : new byte[buffer.Length];
-        if (!ReadProcessMemory(handle, (nint)address, tmp, buffer.Length, out nint read) || read != buffer.Length) return false;
-        tmp.AsSpan(0, buffer.Length).CopyTo(buffer);
-        return true;
+        // an empty read still asks Windows (as it always did), with a real buffer address
+        ref byte target = ref buffer.IsEmpty ? ref none[0] : ref MemoryMarshal.GetReference(buffer);
+        return ReadProcessMemory(handle, (nint)address, ref target, buffer.Length, out nint read) && read == buffer.Length;
     }
 
-    readonly byte[] scratch = new byte[1 << 16]; // one sampler thread per ProcessMemory
+    static readonly byte[] none = new byte[1];
 
     /// <summary>
     /// Committed, readable memory regions (VirtualQueryEx with the same read-only handle).
@@ -194,13 +202,12 @@ public sealed class ProcessMemory : IMemory, IDisposable
         public uint State, Protect, Type;
     }
 
-    [DllImport("kernel32.dll", SetLastError = true)] static extern nint VirtualQueryEx(nint process, nint address, out MEMORY_BASIC_INFORMATION info, int length);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern nint VirtualQueryEx(SafeProcessHandle process, nint address, out MEMORY_BASIC_INFORMATION info, int length);
 
     /// <inheritdoc/>
-    public void Dispose() => CloseHandle(handle);
+    public void Dispose() => handle.Dispose();
 
-    [DllImport("kernel32.dll", SetLastError = true)] static extern nint OpenProcess(uint access, bool inherit, uint pid);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool ReadProcessMemory(nint process, nint address, [Out] byte[] buffer, nint size, out nint read);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetExitCodeProcess(nint process, out uint code);
-    [DllImport("kernel32.dll")] static extern bool CloseHandle(nint h);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern SafeProcessHandle OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool ReadProcessMemory(SafeProcessHandle process, nint address, ref byte buffer, nint size, out nint read);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetExitCodeProcess(SafeProcessHandle process, out uint code);
 }

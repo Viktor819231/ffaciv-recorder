@@ -15,7 +15,7 @@ public sealed partial class Streamer
     /// <summary>Queues a choice even while offline; completion is sent after all saves and logs are acknowledged.</summary>
     public void ChooseReplay(string context, JsonObject choice)
     {
-        if (!System.Text.RegularExpressions.Regex.IsMatch(context, "^[a-f0-9]{32}$")) throw new ArgumentException("Invalid recording.");
+        if (!GameIndex.IsContext(context)) throw new ArgumentException("Invalid recording.");
         lock (replayLock)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(ReplayFile(context))!);
@@ -70,7 +70,7 @@ public sealed partial class Streamer
 
     async Task RefreshReplayAsync(GameEntry game, StreamState state, CancellationToken ct)
     {
-        if (!MayUpload || !CanContactServer() || !CanUploadGame(game)) return;
+        if (!MayUploadGame(game)) return;
         if (game.Identity.StartsWith("channel:")) return;
         lock (replayLock)
         {
@@ -84,12 +84,15 @@ public sealed partial class Streamer
             bool drained = (!File.Exists(eventsFile) || state.SentOffset >= new FileInfo(eventsFile).Length)
                 && SavesOf(game.Folder).All(f => state.SentSaves.ContainsKey(Path.GetFileName(f)));
             bool send = pending.Count > 0 && (pending["action"] is null || (drained && (pending["waitForEnd"]?.GetValue<bool>() != true || Ended(eventsFile))));
-            if (!MayUpload || !CanContactServer() || !CanUploadGame(game)) return;
+            if (!MayUploadGame(game)) return;
             var path = $"recordings/{game.Context}/state";
             using var r = await SendAsync(() => new HttpRequestMessage(send ? HttpMethod.Post : HttpMethod.Get, path)
             { Content = send ? new StringContent(pending.ToJsonString(), Encoding.UTF8, "application/json") : null }, ct);
-            if (!r.IsSuccessStatusCode) return;
+            if (!r.IsSuccessStatusCode) { PollAgainIn(game.Context, SettledPoll); return; }   // a refusal is not asked again every 15 s
             var body = await r.Content.ReadAsStringAsync(ct);
+            // nothing left to send or choose, and the site is done with it: its state changes rarely now
+            if (!send && pending.Count == 0 && drained && JsonNode.Parse(body)?["state"]?.GetValue<string>() is "ready" or "deleted")
+                PollAgainIn(game.Context, SettledPoll);
             if (!settings.KeepCopies && JsonNode.Parse(body)?["state"]?.GetValue<string>() == "deleted" && drained
                 && File.Exists(eventsFile) && DateTime.UtcNow - File.GetLastWriteTimeUtc(eventsFile) >= TimeSpan.FromHours(1))
             {
@@ -99,11 +102,25 @@ public sealed partial class Streamer
             lock (replayLock)
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(ReplayFile(game.Context))!);
-                SafeFiles.Replace(ReplayFile(game.Context), body);
+                if (!SameText(ReplayFile(game.Context), body)) SafeFiles.Replace(ReplayFile(game.Context), body);
                 if (send && ReadReplay(game.Context, true).ToJsonString() == pending.ToJsonString()) File.Delete(ReplayFile(game.Context, true));
             }
         }
         catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException) { Log("Replay status: " + e.Message); }
+    }
+
+    /// <summary>How often a finished, fully sent recording's replay state is asked for (a busy one: every 15 s).</summary>
+    public static readonly TimeSpan SettledPoll = TimeSpan.FromMinutes(10);
+
+    void PollAgainIn(string context, TimeSpan wait)
+    {
+        lock (replayLock) replayPoll[context] = Environment.TickCount64 + (long)wait.TotalMilliseconds;
+    }
+
+    static bool SameText(string file, string text)
+    {
+        try { return File.Exists(file) && SafeFiles.ReadAllText(file) == text; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return false; }
     }
 
     /// <summary>Processed games remain manageable after confirmed local copies are removed.</summary>
@@ -119,6 +136,7 @@ public sealed partial class Streamer
     public async Task SetReplayAccessAsync(string mod, string game, JsonObject choice, CancellationToken ct)
     {
         accessChange.Value = true;
+        await EnsureRegisteredAsync(ct);
         using var r = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"games/{Uri.EscapeDataString(mod)}/{Uri.EscapeDataString(game)}/access")
         { Content = new StringContent(choice.ToJsonString(), Encoding.UTF8, "application/json") }, ct);
         r.EnsureSuccessStatusCode();
@@ -127,6 +145,7 @@ public sealed partial class Streamer
     /// <summary>The converter's acknowledged progress and game links for a manual full-game upload.</summary>
     public async Task<JsonObject> GetBatchProgressAsync(string batch, CancellationToken ct)
     {
+        await EnsureRegisteredAsync(ct);
         using var r = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, $"batches/{Uri.EscapeDataString(batch)}"), ct);
         r.EnsureSuccessStatusCode();
         return JsonNode.Parse(await r.Content.ReadAsStringAsync(ct))!.AsObject();

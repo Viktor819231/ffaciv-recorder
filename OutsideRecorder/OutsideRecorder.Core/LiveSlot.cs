@@ -29,7 +29,7 @@ public sealed partial class Streamer
     public async Task<LiveSlotState> LiveSlotAsync(string game, string? channel, string action, CancellationToken ct)
     {
         await EnsureRegisteredAsync(ct);
-        var r = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, "live/slot")
+        using var r = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, "live/slot")
         { Content = new StringContent(JsonSerializer.Serialize(new { game, channel, action }), Encoding.UTF8, "application/json") }, ct);
         if (r.StatusCode == HttpStatusCode.NotFound) return new LiveSlotState(settings.Stream == "local" ? "granted" : "unavailable");
         if (!r.IsSuccessStatusCode) return LiveSlotState.Unknown;

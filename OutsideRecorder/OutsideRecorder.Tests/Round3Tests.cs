@@ -52,7 +52,7 @@ public sealed class Round3Tests(ITestOutputHelper output)
             StateReader? reader = null;
             foreach (var (h, s) in TapeReader.Read(Path.Combine(session, "tape.bin.gz")))
             {
-                if (h is not null) { reader = new StateReader(mem, h.ModuleBase, KnownLayouts.All.Single(l => l.Id == h.Layout)) { BlockReads = h.Reads >= 2 }; continue; }
+                if (h is not null) { reader = TapeReplay.ReaderFor(h, mem); continue; }
                 mem.Apply(s!);
                 var (st, snap, _) = reader!.Read(0);
                 if (st == SampleStatus.Ok && snap is not null) { ids.Add(GamePipeline.IdentityOf(snap)); break; }

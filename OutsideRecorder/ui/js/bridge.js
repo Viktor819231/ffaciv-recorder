@@ -1,13 +1,19 @@
 // The one door between the window and the recorder (docs/spec/OR02-recorder-ui.md "The contract").
 //
 // Program → window (chrome.webview.postMessage, JSON):
-//   { type: 'state', state }   the whole state, whenever it changed (shape: mock.js base(); null = not known)
-//   { type: 'result', dialog?, toast? }   the answer to a command that needs one (e.g. the autosave fix's changes)
+//   { type: 'state', state }   the whole state, whenever it changed (LiveBackend.BuildState; shape: mock.js base(); null = not known)
+//   { type: 'result', cmd, dialog?, toast? }   the answer to a command (e.g. the autosave fix's changes, a toast to show)
 //   { type: 'command', cmd, args }   a button pressed in a pop-up (the main window runs it like its own button)
-// Window → program:
-//   { cmd, args }   publishNow, postpone, dontRecord, pauseGame, withdraw, upload, allowRequest, declineRequest, revoke,
-//                   setSetting, fixAutosave, retry, updateNow, updateLater, sendReport, linkSteam, unlinkSteam,
-//                   finishFirstRun, openSite, openFolder, chooseFolder, showWindow, hideWindow
+// Window → program (LiveBackend.Handle / HandleUx; the window frame itself: ShellForm):
+//   { cmd, args }   setup and options: setSetting, setMemoryLogging, setCaptureMethod, setUploadFormat, simpleSetup, finishFirstRun
+//                   recording: pauseGame, dontRecord, recordAnyway, fixAutosave, refreshLobby
+//                   livestream: startLivestream, stopLivestream, copyLiveLink
+//                   a recording: uploadGameNow, postponeUpload, confirmGameFinished, continueGame, completeGame, keepShortGame,
+//                     replayChoice, deleteGame, undoDelete, showSaves
+//                   old games: scanOldGames, addOldFolder, uploadOldGames, setOldGamesUpload, stopOldUpload, dismissOldHint
+//                   the rest: checkCrashRecords, sendReport, checkUpdates, updateNow, updateLater, openSite, openFolder,
+//                     chooseFolder, editSettings
+//                   the window frame, no answer: ready, showWindow, hideWindow, showOptions, reviewDelete
 //   { cmd: 'ui.tray', args: { kind, tip } } and { cmd: 'ui.toast', args: toast }   preview only: the made-up state's
 //                   tray icon and pop-ups (the real program makes these itself from its own state)
 //
@@ -44,5 +50,5 @@ const Bridge = (() => {
   }
   function scenario(name) { Mock.load(name); emit({ type: 'state', state: Mock.state }); }
 
-  return { demo, hosted: !!web, on: (f) => listeners.push(f), send, start, scenario, toHost };
+  return { demo, on: (f) => listeners.push(f), send, start, scenario, toHost };
 })();

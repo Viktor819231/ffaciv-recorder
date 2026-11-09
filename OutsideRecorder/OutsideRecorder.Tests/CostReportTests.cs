@@ -71,7 +71,7 @@ public sealed class CostReportTests(ITestOutputHelper output)
             if (h is not null)
             {
                 mem.Clear(); counting = new Counting(mem);
-                reader = new StateReader(counting, h.ModuleBase, KnownLayouts.All.Single(l => l.Id == h.Layout)) { BlockReads = h.Reads >= 2 };
+                reader = TapeReplay.ReaderFor(h, counting);
                 var c = counting; reader.Phase = p => c.Phase = p;
                 continue;
             }
@@ -113,7 +113,7 @@ public sealed class CostReportTests(ITestOutputHelper output)
                 var m3 = new ReplayMemory(); StateReader? r3 = null;
                 foreach (var (h, s) in TapeReader.Read(Path.Combine(session, "tape.bin.gz")))
                 {
-                    if (h is not null) { m3.Clear(); r3 = new StateReader(m3, h.ModuleBase, KnownLayouts.All.Single(l => l.Id == h.Layout)) { BlockReads = h.Reads >= 2 }; continue; }
+                    if (h is not null) { m3.Clear(); r3 = TapeReplay.ReaderFor(h, m3); continue; }
                     var t0 = Stopwatch.GetTimestamp(); m3.Apply(s!); r3!.Read(0); plain += Stopwatch.GetElapsedTime(t0).TotalMilliseconds; pn++;
                 }
             }
@@ -130,7 +130,7 @@ public sealed class CostReportTests(ITestOutputHelper output)
                 {
                     mem2.Clear(); w?.Dispose();
                     w = new TapeWriter(tapeDir, h); taping = new TapingMemory(mem2) { Tape = w };
-                    r2 = new StateReader(taping, h.ModuleBase, KnownLayouts.All.Single(l => l.Id == h.Layout)) { BlockReads = h.Reads >= 2 };
+                    r2 = TapeReplay.ReaderFor(h, taping);
                     continue;
                 }
                 mem2.Apply(s!);

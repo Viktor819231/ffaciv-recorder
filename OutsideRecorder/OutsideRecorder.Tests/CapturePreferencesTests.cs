@@ -49,6 +49,20 @@ public sealed class CapturePreferencesTests : IDisposable
     }
 
     [Fact]
+    public void OldGamesFollowTheRecordingMethodUntilThePlayerAnswersTheQuestion()
+    {
+        var settings = new JsonObject { ["saveUpload"] = "full" };
+        Assert.Null(CapturePreferences.OldGamesChoice(settings));
+        Assert.Equal("full", CapturePreferences.OldGamesFormat(settings));
+        settings["oldGamesUpload"] = "delta";   // answered "Smaller upload" on the first Manual upload
+        Assert.Equal("delta", CapturePreferences.OldGamesFormat(settings));
+        Assert.Equal("full", CapturePreferences.Format(settings));   // live recording keeps its own method
+        settings["oldGamesUpload"] = "nonsense";
+        Assert.Null(CapturePreferences.OldGamesChoice(settings));
+        Assert.Equal("full", CapturePreferences.OldGamesFormat(settings));
+    }
+
+    [Fact]
     public void ExplicitWhilePlayingChoiceControlsTheActualSenderGate()
     {
         var policy = new UploadPolicy { IsPlaying = () => true };

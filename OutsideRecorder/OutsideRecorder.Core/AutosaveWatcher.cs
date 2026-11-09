@@ -17,15 +17,12 @@ public sealed class AutosaveWatcher
     readonly Dictionary<string, (long Size, DateTime Time)> reported = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, (long Size, DateTime Time)> pending = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Watches these folders (missing ones are fine and checked again each poll).</summary>
-    public AutosaveWatcher(IReadOnlyList<string> folders, bool ignoreExisting = true, TimeSpan settleFor = default, Func<DateTime>? utcNow = null)
+    /// <summary>Watches these folders (missing ones are fine and checked again each poll). Saves already there are not new.</summary>
+    public AutosaveWatcher(IReadOnlyList<string> folders, TimeSpan settleFor = default, Func<DateTime>? utcNow = null)
     {
         this.folders = folders; this.settleFor=settleFor; this.utcNow=utcNow??(()=>DateTime.UtcNow);
-        if (ignoreExisting) foreach (var f in List()) reported[f.FullName] = (f.Length, f.LastWriteTimeUtc);
+        foreach (var f in List().Files) reported[f.FullName] = (f.Length, f.LastWriteTimeUtc);
     }
-
-    /// <summary>The folders being watched.</summary>
-    public IReadOnlyList<string> Folders => folders;
 
     /// <summary>A bounded metadata snapshot for shutdown recovery; no save contents are read.</summary>
     public IReadOnlyList<AutosaveSeen> PendingFiles(int maximum) => pending
@@ -59,8 +56,24 @@ public sealed class AutosaveWatcher
         return accepted;
     }
 
-    IEnumerable<FileInfo> List() => folders.Where(Directory.Exists)
-        .SelectMany(d => { try { return new DirectoryInfo(d).GetFiles("*.Civ5Save"); } catch { return []; } });
+    /// <summary>The saves now in the folders, and which folders could really be listed: a folder that is missing for a
+    /// moment (OneDrive offline, a drive waking up) must not count as "every save in it is gone".</summary>
+    (List<FileInfo> Files, HashSet<string> Listed) List()
+    {
+        var files = new List<FileInfo>();
+        var listed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var d in folders)
+        {
+            try
+            {
+                if (!Directory.Exists(d)) continue;
+                files.AddRange(new DirectoryInfo(d).GetFiles("*.Civ5Save"));
+                listed.Add(Path.TrimEndingDirectorySeparator(Path.GetFullPath(d)));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { }
+        }
+        return (files, listed);
+    }
 
     /// <summary>
     /// Observes metadata without opening saves. Deferred or excess ready files remain pending for a later poll;
@@ -70,7 +83,8 @@ public sealed class AutosaveWatcher
     {
         var done = new List<AutosaveSeen>();
         var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var f in List())
+        var (files, listed) = List();
+        foreach (var f in files)
         {
             present.Add(f.FullName);
             var now = (f.Length, f.LastWriteTimeUtc);
@@ -85,9 +99,11 @@ public sealed class AutosaveWatcher
             }
             else { pending[f.FullName] = now; stableSince[f.FullName]=utcNow(); }
         }
-        // Civ rotates autosaves. Do not retain metadata for every file ever seen, and allow a deleted name to reappear.
-        foreach (var path in reported.Keys.Where(p => !present.Contains(p)).ToArray()) reported.Remove(path);
-        foreach (var path in pending.Keys.Where(p => !present.Contains(p)).ToArray())
+        // Civ rotates autosaves. Do not retain metadata for every file ever seen, and allow a deleted name to reappear,
+        // but only for folders listed now: otherwise every old save there would come back as new once the folder returns.
+        bool Gone(string path) => !present.Contains(path) && listed.Contains(Path.GetDirectoryName(path) ?? "");
+        foreach (var path in reported.Keys.Where(Gone).ToArray()) reported.Remove(path);
+        foreach (var path in pending.Keys.Where(Gone).ToArray())
         { pending.Remove(path); stableSince.Remove(path); }
         return done;
     }

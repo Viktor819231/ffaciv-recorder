@@ -31,7 +31,12 @@ public static class SafeFiles
     public static void Replace(string path, string text)
     {
         var tmp = $"{path}.{Environment.ProcessId}.{Environment.CurrentManagedThreadId}.tmp";
-        File.WriteAllText(tmp, text);
+        using (var f = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            var bytes = System.Text.Encoding.UTF8.GetBytes(text);
+            f.Write(bytes);
+            f.Flush(flushToDisk: true);   // a power cut after the rename must not leave a file full of zeros
+        }
         for (int i = 0; ; i++)
         {
             try { File.Move(tmp, path, overwrite: true); return; }

@@ -25,9 +25,10 @@ public sealed record UploadDecision
     public string? Hold { get; init; }
 }
 
-/// <summary>Durable two-hour holds: a finished game uploads at once, hidden on the site, and goes public two hours later
-/// (the user, 2026-11-02: "wait 2 hours to become visible" instead of 2 hours to upload). Restarts preserve choices and
-/// never skip the five-minute warning before it goes public.</summary>
+/// <summary>Durable two-hour holds: a finished game uploads once Civ is closed, hidden on the site, and goes public two hours
+/// after that (the user, 2026-11-02: "wait 2 hours to become visible" instead of 2 hours to upload; 2026-11-09: "upload when
+/// civ is not running but going public after 2 hours"). Restarts preserve choices and never skip the five-minute warning
+/// before it goes public.</summary>
 public sealed class DelayedUploads(string root, Func<DateTimeOffset>? utcNow = null)
 {
     readonly object gate = new();
@@ -39,7 +40,7 @@ public sealed class DelayedUploads(string root, Func<DateTimeOffset>? utcNow = n
     string Folder => Path.Combine(root, "upload-decisions");
     string FileOf(string context)
     {
-        if (!Regex.IsMatch(context, "^[a-f0-9]{32}$")) throw new ArgumentException("Invalid recording.");
+        if (!GameIndex.IsContext(context)) throw new ArgumentException("Invalid recording.");
         return Path.Combine(Folder, context + ".json");
     }
 
@@ -109,8 +110,18 @@ public sealed class DelayedUploads(string root, Func<DateTimeOffset>? utcNow = n
     public void MarkEndPrompted(string context) { lock (gate) Save(Get(context) with { EndPrompted = true }); }
     /// <summary>Explicitly releases this game (public now); the global upload switch and process-idle gate still apply.</summary>
     public void UploadNow(string context) { lock (gate) Save(Get(context) with { State = "upload", DueAt = null, WarningAt = null, EndPrompted = true, Postponed = false, Hold = "kept" }); }
-    /// <summary>Settles how the site copy is held: "hidden" (made private until DueAt) or "kept" (left as it was).</summary>
-    public void MarkHold(string context, string hold) { lock (gate) Save(Get(context) with { Hold = hold }); }
+    /// <summary>Settles how the site copy is held: "hidden" (made private until DueAt) or "kept" (left as it was). The hidden
+    /// time counts from here, when the upload begins: a game that waited hours for Civ to close still gets its two hours.</summary>
+    public void MarkHold(string context, string hold)
+    {
+        lock (gate)
+        {
+            var choice = Get(context) with { Hold = hold };
+            if (hold == "hidden" && choice.State == "waiting" && (choice.DueAt is not { } due || due < now() + DefaultDelay))
+                choice = choice with { DueAt = now() + DefaultDelay, WarningAt = null };
+            Save(choice);
+        }
+    }
     /// <summary>The player chose the replay's privacy by hand: that choice wins, nothing is made public automatically.</summary>
     public void EndHold(string context) { lock (gate) { var choice = Get(context); if (choice.Hold == "hidden") Save(choice with { Hold = "kept" }); } }
     /// <summary>The site confirmed the hidden replay is public now.</summary>
@@ -134,7 +145,7 @@ public sealed class DelayedUploads(string root, Func<DateTimeOffset>? utcNow = n
             foreach (var file in Directory.GetFiles(Folder, "*.json"))
             {
                 var context = Path.GetFileNameWithoutExtension(file);
-                if (!Regex.IsMatch(context, "^[a-f0-9]{32}$")) continue;
+                if (!GameIndex.IsContext(context)) continue;
                 var choice = Get(context);
                 if (choice.State != "waiting" || choice.WarningAt is not null || choice.DueAt is not { } due || due - now() > WarningDelay) continue;
                 choice = choice with { WarningAt = now(), DueAt = due < now() + WarningDelay ? now() + WarningDelay : due };
@@ -151,7 +162,7 @@ public sealed class DelayedUploads(string root, Func<DateTimeOffset>? utcNow = n
         {
             if (!Directory.Exists(Folder)) return [];
             return Directory.GetFiles(Folder, "*.json").Select(Path.GetFileNameWithoutExtension)
-                .Where(c => Regex.IsMatch(c!, "^[a-f0-9]{32}$")).Select(c => Get(c!))
+                .Where(c => GameIndex.IsContext(c)).Select(c => Get(c!))
                 .Where(d => d.State == "waiting" && d.Hold == "hidden" && d.WarningAt is not null && d.DueAt <= now()).ToList();
         }
     }

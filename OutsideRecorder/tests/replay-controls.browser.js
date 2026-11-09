@@ -1,7 +1,7 @@
 // Preview-only browser check, evaluated by tools/site/shot.mjs. Sends no real commands.
 (() => {
   const check=(ok,message)=>{if(!ok)throw Error(message);};
-  Mock.state.firstRun=false;Mock.state.live=true;
+  Mock.state.firstRun=false;
   Mock.state.current={...Mock.state.current,id:'test-current',context:'test-current',turn:37,ended:false,status:'recording',replay:{state:'recording',private:true,keepShort:false},upload:{state:'held'}};
   Bridge.send('previewRefresh');App.go('home');
   const card=()=>document.querySelector('.recorder-recordings .replay-state');

@@ -33,7 +33,10 @@ sealed class ToastWindow : Form
         dismiss.BringToFront();
         Resize += (_, _) => { dismiss.Size = Scale(new Size(28, 28)); dismiss.Location = new Point(ClientSize.Width - dismiss.Width - Scale(new Size(8, 0)).Width, Scale(new Size(0, 8)).Height); };
         // A native watchdog is independent of the web renderer, including its hover-paused timer.
-        expiry.Interval = Math.Clamp(toast["timeout"]?.GetValue<int>() ?? 12000, 1000, 60000);
+        // the page's own time (toast.js: 20 s with buttons, 7 s without) plus room for a hover pause: before, a pop-up with
+        // buttons closed at 12 s while its time bar still showed 40 % left
+        int pageTimeout = toast["timeout"]?.GetValue<int>() ?? (toast["actions"] is JsonArray { Count: > 0 } ? 20000 : 7000);
+        expiry.Interval = Math.Clamp(pageTimeout + 10000, 1000, 70000);
         expiry.Tick += (_, _) => Dismiss();
         Shown += (_, _) => expiry.Start();
         Size = Scale(new Size(360, 96));
@@ -147,7 +150,8 @@ sealed class ToastWindow : Form
             ui.BeginInvoke(() => {
                 ToastWindow? t = null;
                 try {
-                    while (Snapshot().Length >= 3) Snapshot()[0].Dismiss();
+                    var shown = Snapshot();
+                    for (int i = 0; i <= shown.Length - 3; i++) shown[i].Dismiss();   // keep the newest two (one pass: never a loop that cannot end)
                     t = new ToastWindow(copy, onCommand);
                     lock (openGate) open.Add(t);
                     t.Show();

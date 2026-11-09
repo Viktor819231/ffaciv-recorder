@@ -1,4 +1,4 @@
-FFACiv Recorder 0.7.27 - data and privacy information
+FFACiv Recorder 0.7.28 - data and privacy information
 
 CAPTURE
 By default the recorder watches Civ autosave folders and copies settled saves.
@@ -17,8 +17,8 @@ UPLOADS
 When uploads are enabled, the recorder sends copied/selected saves and necessary
 recording information to its configured server, normally ffaciv.com. Upload timing,
 format and optional memory logging are separate choices in setup. With automatic
-uploads on, a finished game is sent once Civ is in its main menu or closed (a
-multiplayer staging lobby counts as playing), when resources allow. The replay
+uploads on, a finished game is sent once Civ is closed, when resources allow
+(the main menu and a multiplayer staging lobby count as playing). The replay
 then stays hidden on ffaciv.com for 2 hours and goes public by itself; a warning
 comes 5 minutes before, with Hide 2 more hours and Delete, and the game card
 offers Make public now and Keep hidden. During-play/experimental sharing

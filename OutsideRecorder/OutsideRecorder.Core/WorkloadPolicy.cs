@@ -11,7 +11,7 @@ public sealed class WorkloadPolicy
     public double RecorderCpuBudgetPercent => EffectiveBudget;
     bool quiet, pressured;
     string quietReason = "Waiting for game to settle", pressureReason = "Computer is busy";
-    DateTimeOffset? highSince, lowSince, lastAt;
+    long? highSince, lowSince, lastMs;   // milliseconds of SampleMs()
     Pressure causes;
     [Flags] enum Pressure { None = 0, SystemCpu = 1, RecorderCpu = 2, Memory = 4 }
 
@@ -27,11 +27,18 @@ public sealed class WorkloadPolicy
     /// The recorder's own CPU never holds them: it runs below normal priority, so Civ always comes first, and holding cut
     /// each turn's save upload halfway, starting it over and over (a livestream fell 9 turns behind, 2026-11-02).</summary>
     public bool CanStartHeavyWork { get { lock (sync) return !quiet && !(pressured && ComputerCause); } }
-    /// <summary>Independent of capture mode: a permission never enables a disabled memory reader. Low memory alone does not
-    /// stop reading Civ (the reads hold ~75 MB; on a full PC the brake paused a whole game, 2026-11-01): only a busy
-    /// computer does. The recorder over its own budget reads more slowly instead (<see cref="MinimumSampleMs"/>).</summary>
-    public bool CanReadMemory { get { lock (sync) return !quiet && !(pressured && causes.HasFlag(Pressure.SystemCpu)); } }
-    /// <summary>On suspected CPU pressure slow capture immediately, before the sustained pause threshold.</summary>
+    /// <summary>Independent of capture mode: a permission never enables a disabled memory reader. Only a quiet period (the
+    /// turn transition) stops reading Civ. Pressure slows it instead (<see cref="MinimumSampleMs"/>: one look a second on a
+    /// busy computer): the recorder runs below normal priority, so Windows already favours Civ. Low memory paused a whole
+    /// game (2026-11-01); a busy computer stopped reading while Civ itself kept three cores busy, so no recording began and
+    /// no save was copied (2026-11-09).</summary>
+    public bool CanReadMemory { get { lock (sync) return !quiet; } }
+    /// <summary>A save copy is one small file per turn at below-normal priority: only the turn-transition quiet holds it. A busy
+    /// computer must not hold it for long: Civ deletes its oldest autosaves beyond the kept count, so a long game on a fully
+    /// loaded PC could lose its early turns before they were kept (2026-11-09).</summary>
+    public bool CanCopySaves { get { lock (sync) return !quiet; } }
+    /// <summary>On suspected CPU pressure slow capture immediately, before the sustained pause threshold; a sustained busy
+    /// computer reads Civ once a second.</summary>
     public int MinimumSampleMs { get { lock (sync) return quiet || pressured && causes.HasFlag(Pressure.SystemCpu) ? 1000 : (highSince is not null || pressured) && CpuCause ? 500 : 50; } }
     bool CpuCause => (causes & ~Pressure.Memory) != 0;
     bool ComputerCause => (causes & ~Pressure.RecorderCpu) != 0;
@@ -44,15 +51,20 @@ public sealed class WorkloadPolicy
         lock (sync) { this.quiet = quiet; quietReason = reason; }
     }
 
-    /// <summary>Pause after four seconds of pressure; require eight seconds of observed recovery before resuming.</summary>
+    /// <summary>A sample's time for intervals: its monotonic tick when it has one, else its wall-clock time.</summary>
+    static long SampleMs(ResourceSample s) => s.TickMs ?? s.At.ToUnixTimeMilliseconds();
+
+    /// <summary>Pause after four seconds of pressure; require eight seconds of observed recovery before resuming. A sample
+    /// not newer than the last one (the monitor's cached sample) is ignored.</summary>
     public void Observe(ResourceSample sample)
     {
         lock (sync)
         {
-            if (lastAt is DateTimeOffset at && sample.At <= at) return;
+            long now = SampleMs(sample);
+            if (lastMs is long at && now <= at) return;
             // Missing a monitoring interval does not count as continuously observed high or low load.
-            if (lastAt is DateTimeOffset last && sample.At - last > TimeSpan.FromSeconds(6)) { highSince = null; lowSince = null; }
-            lastAt = sample.At;
+            if (lastMs is long last && now - last > 6000) { highSince = null; lowSince = null; }
+            lastMs = now;
             Pressure high = Pressure.None;
             if (Valid(sample.SystemCpuPercent) is double cpu && cpu >= 85) high |= Pressure.SystemCpu;
             if (Valid(sample.RecorderCpuPercent) is double own && own >= EffectiveBudget) high |= Pressure.RecorderCpu;
@@ -61,10 +73,10 @@ public sealed class WorkloadPolicy
             if (sample.AvailableMemoryBytes is >= 0 and var available && available < enterMemory) high |= Pressure.Memory;
             if (high != Pressure.None)
             {
-                highSince ??= sample.At;
+                highSince ??= now;
                 lowSince = null;
                 causes |= high;
-                if (pressured || sample.At - highSince >= TimeSpan.FromSeconds(4))
+                if (pressured || now - highSince >= 4000)
                 {
                     pressured = true;
                     pressureReason = causes.HasFlag(Pressure.Memory) ? "Waiting for more available memory" : causes.HasFlag(Pressure.SystemCpu) ? "Waiting for the computer to be less busy" : "Reading Civ more slowly to keep recorder CPU use within its budget";
@@ -77,8 +89,8 @@ public sealed class WorkloadPolicy
                 Healthy(sample.RecorderCpuPercent, EffectiveBudget * .75, causes.HasFlag(Pressure.RecorderCpu)) &&
                 (sample.AvailableMemoryBytes is long memory ? memory >= leaveMemory : !causes.HasFlag(Pressure.Memory));
             if (!recovered) { lowSince = null; return; }
-            lowSince ??= sample.At;
-            if (sample.At - lowSince >= TimeSpan.FromSeconds(8)) { pressured = false; lowSince = null; causes = Pressure.None; }
+            lowSince ??= now;
+            if (now - lowSince >= 8000) { pressured = false; lowSince = null; causes = Pressure.None; }
         }
     }
 

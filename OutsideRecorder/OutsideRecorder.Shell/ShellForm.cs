@@ -20,7 +20,9 @@ sealed class ShellForm : Form
     readonly ToolStripMenuItem linkItem = new("Livestream options…");
     readonly System.Windows.Forms.Timer poll = new() { Interval = 700 };
     string lastStateJson = "", trayKind = "";
-    bool quitting, toldAboutTray, pageReady;
+    bool quitting, toldAboutTray, pageReady, backendStarted, windowBroken;
+    /// <summary>How the window comes back from the tray: maximised when it was closed maximised.</summary>
+    FormWindowState shownState = FormWindowState.Normal;
     JsonObject? lastState;
 
     public ShellForm(IRecorderBackend? backend, bool dev, bool startHidden, bool showSetup = false)
@@ -34,7 +36,6 @@ sealed class ShellForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         Icon = TrayIcons.Get("waiting", 32);
         Controls.Add(view);
-        if (startHidden) { WindowState = FormWindowState.Minimized; ShowInTaskbar = false; }
 
         // ---- tray ----
         menu.Font = new Font("Segoe UI", 9.5f);
@@ -57,11 +58,15 @@ sealed class ShellForm : Form
             if (!Visible || WindowState == FormWindowState.Minimized || t["actions"] is not null) ShowToast(t);
         });
         poll.Tick += (_, _) => PushState();
-        // hidden by the clock (how it runs during a game): the state is built less often, the tray icon still follows
-        VisibleChanged += (_, _) => poll.Interval = Visible && WindowState != FormWindowState.Minimized ? 700 : 3000;
-        Resize += (_, _) => poll.Interval = Visible && WindowState != FormWindowState.Minimized ? 700 : 3000;
+        // hidden by the clock (how it runs during a game): only the timed work and the tray icon, less often; the whole
+        // window state again the moment it shows
+        VisibleChanged += (_, _) => Seen();
+        Resize += (_, _) => { if (WindowState != FormWindowState.Minimized) shownState = WindowState; Seen(); };
         HandleCreated += (_, _) => WebUi.DarkTitle(Handle);
         WindowPlace.Restore(this);
+        if (WindowState == FormWindowState.Maximized) shownState = FormWindowState.Maximized;
+        // after Restore: a window closed maximised used to open maximised at Windows start instead of staying by the clock
+        if (startHidden) { WindowState = FormWindowState.Minimized; ShowInTaskbar = false; }
         FormClosed += (_, _) => ToastWindow.CloseAll();
         ResizeEnd += (_, _) => WindowPlace.Save(this);
         FormClosing += (_, _) => WindowPlace.Save(this);
@@ -89,14 +94,17 @@ sealed class ShellForm : Form
             var query = demo ? "?demo=1" : "";
             if (showSetup) query += (demo ? "&" : "?") + "setup=1";
             view.CoreWebView2.Navigate($"https://{WebUi.Host}/index.html{query}");
-            backend?.Start();
-            poll.Start();
+            windowBroken = false;
+            StartBackend();
         }
         catch (OperationCanceledException) when (IsDisposed || Disposing || quitting) { }
         catch (Exception e)
         {
             WebUi.LogStartupError(e);
             if (IsDisposed || Disposing || quitting) return;
+            // recording does not depend on the window: at a Windows start nobody sees this panel, and nothing was recorded
+            windowBroken = true;
+            StartBackend();
             view.Visible = false;
             var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(28), BackColor = BackColor };
             panel.Controls.Add(new Label { AutoSize = true, MaximumSize = new Size(650, 0), ForeColor = Color.White,
@@ -108,6 +116,22 @@ sealed class ShellForm : Form
             quit.Click += (_, _) => Quit(); panel.Controls.Add(quit);
             Controls.Add(panel); panel.BringToFront();
         }
+    }
+
+    void StartBackend()
+    {
+        if (backendStarted) return;
+        backendStarted = true;
+        backend?.Start();
+        poll.Start();
+    }
+
+    bool WindowSeen => pageReady && Visible && WindowState != FormWindowState.Minimized;
+
+    void Seen()
+    {
+        poll.Interval = Visible && WindowState != FormWindowState.Minimized ? 700 : 3000;
+        if (WindowSeen && backendStarted) BeginInvokeSafe(PushState);
     }
 
     void BeginInvokeSafe(Action a)
@@ -127,7 +151,7 @@ sealed class ShellForm : Form
             case "ui.tray": pageReady = true; SetTray(args.Str("kind") ?? "waiting", args.Str("tip") ?? "FFACiv Recorder"); return;
             case "ui.toast": ShowToast(args); return;
             case "showWindow": ShowWindow(); return;
-            case "hideWindow": Hide(); return;
+            case "hideWindow": Hide(); return;   // the page sends these two without waiting for an answer
         }
         Command(cmd, args);
     }
@@ -137,7 +161,6 @@ sealed class ShellForm : Form
     {
         if (cmd == "showWindow") { ShowWindow(); return; }
         if (cmd == "showOptions") { ShowOptions(); return; }
-        if (cmd == "copyLiveLinkFromTray") { ShowRecorder(); return; }
         if (cmd == "reviewDelete")
         {
             ShowWindow();
@@ -156,19 +179,37 @@ sealed class ShellForm : Form
 
     void PushState()
     {
-        if (backend is null || !pageReady) return;
-        var state = backend.BuildState();
-        var json = state.ToJsonString();
-        if (json == lastStateJson) return;
-        lastStateJson = json; lastState = state;
-        Post(J.Obj(("type", "state"), ("state", state)));
+        if (backend is null || !backendStarted) return;
+        try
+        {
+            if (!WindowSeen)
+            {
+                // nobody looks: the recorder's timed work and the tray icon only (the whole state cost CPU all game long)
+                ShowOnTray(backend.BuildTrayState());
+                lastStateJson = "";   // the next look sends the whole state
+                return;
+            }
+            var state = backend.BuildState();
+            var json = state.ToJsonString();
+            if (json == lastStateJson) return;
+            lastStateJson = json; lastState = state;
+            Post("{\"type\":\"state\",\"state\":" + json + "}");
+            ShowOnTray(state);
+        }
+        catch (Exception e) { WebUi.LogError("window refresh", e); }   // the last state stays; the next tick tries again
+    }
+
+    void ShowOnTray(JsonObject state)
+    {
         var kind = state["status"]?["kind"]?.GetValue<string>() ?? "waiting";
         bool problem = (state["checks"] as JsonArray)?.Any(c => c?["level"]?.GetValue<string>() is "warn" or "bad") == true;
+        if (windowBroken) { SetTray("attention", "FFACiv Recorder · " + state["status"]?["title"]?.GetValue<string>() + " · the window could not start"); return; }
         SetTray(kind switch { "recording" => problem ? "attention" : "recording", "sending" => "sending", "unsupported" or "attention" => "attention", "paused" => "paused", _ => "waiting" },
             "FFACiv Recorder · " + state["status"]?["title"]?.GetValue<string>());
     }
 
-    void Post(JsonObject msg) { if (view.CoreWebView2 is not null) view.CoreWebView2.PostWebMessageAsJson(msg.ToJsonString()); }
+    void Post(JsonObject msg) => Post(msg.ToJsonString());
+    void Post(string json) { if (view.CoreWebView2 is not null) view.CoreWebView2.PostWebMessageAsJson(json); }
 
     void SetTray(string kind, string tip)
     {
@@ -182,6 +223,9 @@ sealed class ShellForm : Form
 
     void UpdateMenu()
     {
+        // the window may have been hidden all along: the menu reads the recorder as it is now
+        if (backend is not null && backendStarted && !WindowSeen)
+            try { lastState = backend.BuildState(); } catch (Exception e) { WebUi.LogError("tray menu", e); }
         bool hasGame = demo || lastState?["current"] is JsonObject;
         pauseItem.Enabled = hasGame;
         pauseItem.Checked = lastState?["current"]?["paused"]?.GetValue<bool>() == true;
@@ -216,11 +260,9 @@ sealed class ShellForm : Form
     {
         ShowInTaskbar = true;
         if (!Visible) Show();
-        if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+        if (WindowState == FormWindowState.Minimized) WindowState = shownState;
         Activate();   // only ever when the player asked for the window
     }
-
-    static string Short(string why) => why.StartsWith("No game") ? "no game" : why.StartsWith("Live streaming is off") ? "streaming off" : why.StartsWith("The test server") ? "server not reachable" : why.StartsWith("Connecting") ? "connecting" : "not now";
 
     /// <summary>Ends the program: the window and the icon go at once, then the recorder writes and sends its last lines
     /// (a few seconds at most), then the process ends.</summary>

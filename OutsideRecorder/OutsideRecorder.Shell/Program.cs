@@ -17,6 +17,7 @@ static class Program
     ///   --dev                         allow the browser tools (F12) in the window
     ///   --ui-shot &lt;folder&gt; [--live]  save pictures of the window (made-up data, or --live: the real recorder on this PC),
     ///                                 the tray icons and the tray menu, then quit
+    ///   developer builds only: --check, --replay-tape &lt;session folder&gt; (<see cref="DevTools"/>), --stream-test …
     /// settings.txt next to the exe: where the stream goes (stream_url), the live site (live_site_url), folders.
     /// </summary>
     [STAThread]
@@ -24,23 +25,29 @@ static class Program
     {
 #if !RECORDER_PUBLIC_RELEASE
         // Developer builds only: these harnesses can send requests outside the normal player capture policy.
-        if (args.Any(a => a is "--stream-test" or "--stream-only" or "--stream-verify" or "--site-check"))
+        if (args.Any(a => a is "--stream-test" or "--stream-only" or "--stream-verify" or "--site-check" or "--check" or "--replay-tape"))
         {
             AttachConsole(-1);   // a window program: write to the console it was started from
             try
             {
                 return args.Contains("--stream-test") ? StreamTest.Run(args) : args.Contains("--stream-only") ? StreamTest.StreamOnly(args)
-                    : args.Contains("--stream-verify") ? StreamTest.Verify(args) : SiteCheck.Run(args);
+                    : args.Contains("--stream-verify") ? StreamTest.Verify(args) : args.Contains("--site-check") ? SiteCheck.Run(args) : DevTools.Run(args);
             }
             finally { Console.Out.Flush(); }
         }
 #else
-        if (args.Any(a => a is "--stream-test" or "--stream-only" or "--stream-verify" or "--site-check" or "--dev"))
+        if (args.Any(a => a is "--stream-test" or "--stream-only" or "--stream-verify" or "--site-check" or "--check" or "--replay-tape" or "--dev"))
         {
             MessageBox.Show("Developer tools are not included in this installer.", "FFACiv Recorder");
             return 2;
         }
 #endif
+        // Nothing may end the recorder unseen: errors on the window's thread are logged instead of a WinForms dialog (which
+        // stacked up every few seconds under a failing refresh), and a fatal one leaves its reason in errors.log.
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, e) => WebUi.LogError("window", e.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => WebUi.LogError(e.IsTerminating ? "fatal" : "background", e.ExceptionObject);
+        TaskScheduler.UnobservedTaskException += (_, e) => { WebUi.LogError("background task", e.Exception); e.SetObserved(); };
         bool demo = args.Contains("--demo"), dev = args.Contains("--dev"), tray = args.Contains("--tray");
         int shotAt = Array.IndexOf(args, "--ui-shot");
         string? shotDir = shotAt >= 0 && shotAt + 1 < args.Length ? args[shotAt + 1] : null;
@@ -97,7 +104,6 @@ static class Program
                 await Shot("51-live-games.png", hideWelcome + "App.go('games')");
                 await Shot("52-live-settings.png", hideWelcome + "App.go('settings')");
                 await Shot("53-live-checks.png", hideWelcome + "App.go('checks')");
-                await Shot("54-live-requests.png", hideWelcome + "App.go('requests')");
                 await Shot("55-live-old-games.png", hideWelcome + "App.go('old')");
                 await core.ExecuteScriptAsync("App.go('home')");
             }

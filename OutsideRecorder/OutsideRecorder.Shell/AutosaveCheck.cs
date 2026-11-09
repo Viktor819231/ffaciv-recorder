@@ -23,7 +23,11 @@ static class AutosaveCheck
     public static (int? Between, int? Kept)? Read(string path)
     {
         if (!File.Exists(path)) return null;
-        var text = File.ReadAllText(path, Bytes);
+        string text;
+        // Civ rewrites it on exit and OneDrive may hold it: unreadable for a moment reads as "no file", not as an error
+        // thrown on every window refresh
+        try { using var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); text = new StreamReader(f, Bytes).ReadToEnd(); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
         return (Find(text, TurnsKey), Find(text, KeptKey));
     }
 

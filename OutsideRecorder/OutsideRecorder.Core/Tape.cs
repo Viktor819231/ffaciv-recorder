@@ -9,8 +9,9 @@ public sealed record TapeHeader
 {
     /// <summary>Tape format version.</summary>
     public int Format { get; init; } = 1;
-    /// <summary>How the reader read (1 = a call per field; 2 = blocks + tiers + tiles; 3 = also city micro once a second).
-    /// A replay reads the same way as the live run, so it asks for the same blocks the tape holds.</summary>
+    /// <summary>How the reader read (1 = a call per field; 2 = blocks + tiers + tiles; 3 = also city micro once a second;
+    /// 4 = also unreadable names asked again and a new turn's timer start read at once). A replay reads the same way as the
+    /// live run (<see cref="TapeReplay.ReaderFor"/>), so it asks for the same blocks the tape holds.</summary>
     public int Reads { get; init; } = 1;
     /// <summary>GameCoreLayout.Id of the DLL that was read.</summary>
     public required string Layout { get; init; }
@@ -49,7 +50,8 @@ public sealed class TapeWriter : IDisposable
     {
         Path = System.IO.Path.Combine(folder, "tape.bin.gz");
         bool append = File.Exists(Path);
-        // Appending writes a second gzip member; GZipStream reads concatenated members as one stream.
+        // Appending writes a second gzip member; TapeReader reads each member on its own, so a member cut off by a killed
+        // recorder (no gzip end) does not hide the parts after it.
         gz = new GZipStream(new FileStream(Path, FileMode.Append, FileAccess.Write, FileShare.Read), CompressionLevel.Fastest);
         w = new BinaryWriter(gz, Encoding.UTF8, leaveOpen: true);
         var json = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(header));
@@ -111,7 +113,12 @@ public sealed class TapeWriter : IDisposable
     public void End(double readMs) { w.Write((byte)'E'); w.Write(readMs); w.Flush(); gz.Flush(); }
 
     /// <inheritdoc/>
-    public void Dispose() { w.Flush(); w.Dispose(); gz.Dispose(); }
+    public void Dispose()
+    {
+        // the file is closed even when the disk is full (gzip closes its file in its own finally)
+        try { w.Dispose(); } catch (IOException) { }
+        try { gz.Dispose(); } catch (IOException) { }
+    }
 }
 
 /// <summary>An <see cref="IMemory"/> that passes reads through and, while a sample is open, puts each one on the tape.</summary>
@@ -139,34 +146,107 @@ public sealed class TapingMemory(IMemory inner) : IMemory
 /// <summary>Reads a tape back (stops quietly at a cut-off end, e.g. if the PC lost power).</summary>
 public static class TapeReader
 {
-    /// <summary>Header(s) and samples in order. A continued tape has a new header before its samples.</summary>
+    /// <summary>
+    /// Header(s) and samples in order. A continued tape has a new header before its samples. Each part (a gzip member: the
+    /// first recording, then one per continuation) is read on its own: a part that was cut off (the recorder was killed, so
+    /// its member never got its end) is read up to the cut, then the next part follows. Read as one stream, the cut part ran
+    /// into the next part's bytes and everything from there on was lost.
+    /// </summary>
     public static IEnumerable<(TapeHeader? Header, TapeSample? Sample)> Read(string path)
     {
-        using var gz = new GZipStream(File.OpenRead(path), CompressionMode.Decompress);
-        using var r = new BinaryReader(new BufferedStream(gz, 1 << 16));
-        var magic = r.ReadBytes(8);
-        if (Encoding.ASCII.GetString(magic) != "ORTAPE1\n") throw new InvalidDataException("not an Outside Recorder tape");
-        yield return (ReadHeader(r), null);
+        using var file = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        var starts = PartStarts(file);
+        if (starts.Count == 0 || starts[0] != 0) starts.Insert(0, 0);   // not a gzip file: the first read below says so
+        long length = RandomAccess.GetLength(file);
         var last = new Dictionary<(uint, int), byte[]?>();   // for 'D' records (changed ranges only)
-        while (true)
+        for (int part = 0; part < starts.Count; part++)
         {
-            (TapeHeader? H, TapeSample? S) item;
-            try { item = Next(r, last); }
-            catch (EndOfStreamException) { yield break; }
-            catch (InvalidDataException) { yield break; }
-            if (item.H is null && item.S is null) yield break;
-            yield return item;
+            long end = part + 1 < starts.Count ? starts[part + 1] : length;
+            using var r = new BinaryReader(new BufferedStream(new GZipStream(new Part(file, starts[part], end - starts[part]), CompressionMode.Decompress), 1 << 16));
+            if (part == 0)
+            {
+                var magic = r.ReadBytes(8);
+                if (Encoding.ASCII.GetString(magic) != "ORTAPE1\n") throw new InvalidDataException("not an Outside Recorder tape");
+                yield return (ReadHeader(r), null);
+            }
+            bool header = part > 0;   // a continued part starts with its header
+            while (true)
+            {
+                (TapeHeader? H, TapeSample? S) item;
+                // a cut-off end (or damage): the rest of this part is lost, the next part is read
+                try { item = Next(r, last, header); }
+                catch (Exception e) when (e is EndOfStreamException or InvalidDataException or JsonException) { break; }
+                if (item.H is null && item.S is null) break;
+                header = false;
+                yield return item;
+            }
         }
     }
 
-    static TapeHeader ReadHeader(BinaryReader r) => JsonSerializer.Deserialize<TapeHeader>(r.ReadBytes(r.ReadInt32()))!;
+    /// <summary>How each gzip member this program writes starts: deflate, no flags, no time stamp.</summary>
+    static readonly byte[] PartMagic = [0x1F, 0x8B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00];
 
-    static (TapeHeader?, TapeSample?) Next(BinaryReader r, Dictionary<(uint, int), byte[]?> last)
+    /// <summary>Where each part of the tape starts (the first at 0). Compressed bytes holding these 8 bytes by chance (one in
+    /// 2^64 a position) would split a part: its second piece is not a gzip member and is skipped.</summary>
+    static List<long> PartStarts(Microsoft.Win32.SafeHandles.SafeFileHandle file)
+    {
+        var starts = new List<long>();
+        var block = new byte[1 << 20];
+        long blockStart = 0; int kept = 0;
+        while (true)
+        {
+            int n = RandomAccess.Read(file, block.AsSpan(kept), blockStart + kept);
+            var span = block.AsSpan(0, kept + n);
+            for (int from = 0, i; (i = span[from..].IndexOf(PartMagic)) >= 0; from += i + 1) starts.Add(blockStart + from + i);
+            if (n == 0) return starts;
+            // keep the last 7 bytes: a start may span two blocks (one found whole is never inside them)
+            kept = Math.Min(PartMagic.Length - 1, span.Length);
+            span[^kept..].CopyTo(block);
+            blockStart += span.Length - kept;
+        }
+    }
+
+    /// <summary>One part's bytes of the tape file, read where they lie (its end is the end of the stream).</summary>
+    sealed class Part(Microsoft.Win32.SafeHandles.SafeFileHandle file, long start, long length) : Stream
+    {
+        long at;
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => length;
+        public override long Position { get => at; set => throw new NotSupportedException(); }
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+        public override int Read(Span<byte> buffer)
+        {
+            int n = (int)Math.Min(buffer.Length, length - at);
+            if (n <= 0) return 0;
+            n = RandomAccess.Read(file, buffer[..n], start + at);
+            at += n;
+            return n;
+        }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    /// <summary>The longest single read a tape holds is the tile table (~5 MB on a huge map); a length past this is damage.</summary>
+    const int MaxRecordBytes = 64 << 20;
+
+    static int Length(BinaryReader r)
+    {
+        int n = r.ReadInt32();
+        return n is >= 0 and <= MaxRecordBytes ? n : throw new InvalidDataException($"bad length {n}");
+    }
+
+    static TapeHeader ReadHeader(BinaryReader r) => JsonSerializer.Deserialize<TapeHeader>(r.ReadBytes(Length(r)))!;
+
+    static (TapeHeader?, TapeSample?) Next(BinaryReader r, Dictionary<(uint, int), byte[]?> last, bool header)
     {
         int kind = r.BaseStream.ReadByte();
         if (kind < 0) return (null, null);
         if (kind == 'H') { last.Clear(); return (ReadHeader(r), null); }
-        if (kind != 'S') throw new InvalidDataException($"bad frame {kind}");
+        if (header || kind != 'S') throw new InvalidDataException($"bad frame {kind}");
         long t = r.ReadInt64();
         var changes = new List<(uint, int, byte[]?)>();
         while (true)
@@ -176,15 +256,20 @@ public static class TapeReader
             if (f == 'D')
             {
                 // only the changed ranges of a read whose whole bytes came earlier: patched onto a copy of those
-                uint da = r.ReadUInt32(); int dlen = r.ReadInt32(); int n = r.ReadInt32();
+                uint da = r.ReadUInt32(); int dlen = Length(r); int n = r.ReadInt32();
                 var full = last.TryGetValue((da, dlen), out var before) && before is not null ? (byte[])before.Clone() : new byte[dlen];
-                for (int k = 0; k < n; k++) { int at = r.ReadInt32(), cl = r.ReadInt32(); r.ReadBytes(cl).CopyTo(full, at); }
+                for (int k = 0; k < n; k++)
+                {
+                    int at = r.ReadInt32(), cl = Length(r);
+                    if (at < 0 || at > dlen - cl) throw new InvalidDataException($"bad range {at}+{cl} of {dlen}");
+                    r.ReadBytes(cl).CopyTo(full, at);
+                }
                 last[(da, dlen)] = full;
                 changes.Add((da, dlen, full));
                 continue;
             }
             if (f != 'R') throw new InvalidDataException($"bad record {f}");
-            uint a = r.ReadUInt32(); int len = r.ReadInt32(); bool ok = r.ReadByte() != 0;
+            uint a = r.ReadUInt32(); int len = Length(r); bool ok = r.ReadByte() != 0;
             var data = ok ? r.ReadBytes(len) : null;
             last[(a, len)] = data;
             changes.Add((a, len, data));

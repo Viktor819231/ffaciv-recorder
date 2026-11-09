@@ -7,6 +7,10 @@ namespace OutsideRecorderCore;
 public sealed record ResourceSample
 {
     public DateTimeOffset At { get; init; }
+    /// <summary>A monotonic clock's milliseconds when measured (<see cref="ResourceMonitor"/>: Environment.TickCount64).
+    /// Intervals are measured on it, so the wall clock stepping back (time sync, the user changing the time) cannot freeze the
+    /// workload policy; null = intervals from <see cref="At"/>.</summary>
+    public long? TickMs { get; init; }
     public double? SystemCpuPercent { get; init; }
     /// <summary>CPU as a percentage of the whole machine, like Task Manager; not a percentage of one core.</summary>
     public double? RecorderCpuPercent { get; init; }
@@ -76,7 +80,7 @@ public sealed class ResourceMonitor
             }
             latest = new()
             {
-                At = utcNow(), SystemCpuPercent = systemCpu, RecorderCpuPercent = recorderCpu,
+                At = utcNow(), TickMs = now, SystemCpuPercent = systemCpu, RecorderCpuPercent = recorderCpu,
                 AvailableMemoryBytes = current.AvailableMemoryBytes, TotalMemoryBytes = current.TotalMemoryBytes,
                 WorkingSetBytes = current.WorkingSetBytes, PrivateBytes = current.PrivateBytes,
                 PeakWorkingSetBytes = current.PeakWorkingSetBytes,
